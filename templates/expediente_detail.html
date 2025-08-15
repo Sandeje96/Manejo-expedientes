@@ -1,0 +1,40 @@
+{% extends 'templates/base.html' %}
+{% block title %}Expediente {{ item.nro_expediente_cpim or item.id }} — CPIM{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h3 class="me-auto">Expediente {{ item.nro_expediente_cpim or ('#' ~ item.id) }}</h3>
+  <a class="btn btn-outline-primary" href="{{ url_for('editar_expediente', item_id=item.id) }}">Editar</a>
+</div>
+
+<table class="table table-bordered">
+  <tbody>
+    <tr><th style="width:260px">Fecha</th><td>{{ item.fecha or '-' }}</td></tr>
+    <tr><th>Profesión</th><td>{{ item.profesion or '-' }}</td></tr>
+    <tr><th>Formato</th><td>{{ item.formato or '-' }}</td></tr>
+    <tr><th>Nro de Copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
+    <tr><th>Tipo de trabajo</th><td>{{ item.tipo_trabajo or '-' }}</td></tr>
+    <tr><th>N° expediente CPIM</th><td>{{ item.nro_expediente_cpim or '-' }}</td></tr>
+    <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
+    <tr><th>Comitente</th><td>{{ item.nombre_comitente or '-' }}</td></tr>
+    <tr><th>Ubicación</th><td>{{ item.ubicacion or '-' }}</td></tr>
+    <tr><th>Visados</th>
+      <td>
+        Gas: {{ 'Sí' if item.visado_gas else 'No' }} | 
+        Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} | 
+        Eléctrica: {{ 'Sí' if item.visado_electrica else 'No' }} | 
+        Electromecánica: {{ 'Sí' if item.visado_electromecanica else 'No' }}
+      </td>
+    </tr>
+    <tr><th>Estado pago sellado</th><td>{{ item.estado_pago_sellado or '-' }}</td></tr>
+    <tr><th>Estado pago visado</th><td>{{ item.estado_pago_visado or '-' }}</td></tr>
+    <tr><th>Fecha de salida</th><td>{{ item.fecha_salida or '-' }}</td></tr>
+    <tr><th>Persona que retira</th><td>{{ item.persona_retira or '-' }}</td></tr>
+    <tr><th>Nro de Caja</th><td>{{ item.nro_caja or '-' }}</td></tr>
+    <tr><th>Ruta de carpeta</th><td>{{ item.ruta_carpeta or '-' }}</td></tr>
+    <tr><th>WhatsApp Profesional</th><td>{{ item.whatsapp_profesional or '-' }}</td></tr>
+    <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
+    <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
+    <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>
+  </tbody>
+</table>
+{% endblock %}

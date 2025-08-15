@@ -1,0 +1,114 @@
+{% extends 'templates/base.html' %}
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} expediente — CPIM{% endblock %}
+{% block content %}
+<h3>{{ 'Editar' if item else 'Nuevo' }} expediente</h3>
+<form method="post" class="row g-3">
+  <div class="col-md-3">
+    <label class="form-label">Fecha</label>
+    <input type="date" class="form-control" name="fecha" value="{{ item.fecha if item and item.fecha else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Profesión</label>
+    <input type="text" class="form-control" name="profesion" value="{{ item.profesion if item else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Formato</label>
+    <input type="text" class="form-control" name="formato" value="{{ item.formato if item else '' }}" placeholder="Papel/Digital">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Nro de copias</label>
+    <input type="number" class="form-control" name="nro_copias" value="{{ item.nro_copias if item and item.nro_copias is not none else '' }}">
+  </div>
+
+  <div class="col-md-4">
+    <label class="form-label">Tipo de trabajo</label>
+    <input type="text" class="form-control" name="tipo_trabajo" value="{{ item.tipo_trabajo if item else '' }}">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">N° expediente CPIM</label>
+    <input type="text" class="form-control" name="nro_expediente_cpim" value="{{ item.nro_expediente_cpim if item else '' }}">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Ubicación</label>
+    <input type="text" class="form-control" name="ubicacion" value="{{ item.ubicacion if item else '' }}">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Profesional</label>
+    <input type="text" class="form-control" name="nombre_profesional" value="{{ item.nombre_profesional if item else '' }}">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Comitente</label>
+    <input type="text" class="form-control" name="nombre_comitente" value="{{ item.nombre_comitente if item else '' }}">
+  </div>
+
+  <div class="col-md-3 form-check mt-4">
+    <input class="form-check-input" type="checkbox" name="visado_gas" id="visado_gas" {% if item and item.visado_gas %}checked{% endif %}>
+    <label class="form-check-label" for="visado_gas">Visado instalación de Gas</label>
+  </div>
+  <div class="col-md-3 form-check mt-4">
+    <input class="form-check-input" type="checkbox" name="visado_salubridad" id="visado_salubridad" {% if item and item.visado_salubridad %}checked{% endif %}>
+    <label class="form-check-label" for="visado_salubridad">Visado instalación de Salubridad</label>
+  </div>
+  <div class="col-md-3 form-check mt-4">
+    <input class="form-check-input" type="checkbox" name="visado_electrica" id="visado_electrica" {% if item and item.visado_electrica %}checked{% endif %}>
+    <label class="form-check-label" for="visado_electrica">Visado instalación eléctrica</label>
+  </div>
+  <div class="col-md-3 form-check mt-4">
+    <input class="form-check-input" type="checkbox" name="visado_electromecanica" id="visado_electromecanica" {% if item and item.visado_electromecanica %}checked{% endif %}>
+    <label class="form-check-label" for="visado_electromecanica">Visado instalación electromecánica</label>
+  </div>
+
+  <div class="col-md-4">
+    <label class="form-label">Estado pago sellado</label>
+    <select class="form-select" name="estado_pago_sellado">
+      {% set val = item.estado_pago_sellado if item else '' %}
+      <option value="">-</option>
+      <option value="pendiente" {% if val=='pendiente' %}selected{% endif %}>Pendiente</option>
+      <option value="pagado" {% if val=='pagado' %}selected{% endif %}>Pagado</option>
+      <option value="exento" {% if val=='exento' %}selected{% endif %}>Exento</option>
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Estado pago visado</label>
+    <select class="form-select" name="estado_pago_visado">
+      {% set val2 = item.estado_pago_visado if item else '' %}
+      <option value="">-</option>
+      <option value="pendiente" {% if val2=='pendiente' %}selected{% endif %}>Pendiente</option>
+      <option value="pagado" {% if val2=='pagado' %}selected{% endif %}>Pagado</option>
+      <option value="exento" {% if val2=='exento' %}selected{% endif %}>Exento</option>
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Fecha de salida</label>
+    <input type="date" class="form-control" name="fecha_salida" value="{{ item.fecha_salida if item and item.fecha_salida else '' }}">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">Persona que retira</label>
+    <input type="text" class="form-control" name="persona_retira" value="{{ item.persona_retira if item else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">N° de Caja</label>
+    <input type="number" class="form-control" name="nro_caja" value="{{ item.nro_caja if item and item.nro_caja is not none else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Ruta de carpeta</label>
+    <input type="text" class="form-control" name="ruta_carpeta" value="{{ item.ruta_carpeta if item else '' }}" placeholder="\\\\server\\ruta\\...">
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label">WhatsApp Profesional</label>
+    <input type="text" class="form-control" name="whatsapp_profesional" value="{{ item.whatsapp_profesional if item else '' }}">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">WhatsApp Tramitador</label>
+    <input type="text" class="form-control" name="whatsapp_tramitador" value="{{ item.whatsapp_tramitador if item else '' }}">
+  </div>
+
+  <div class="col-12 d-flex gap-2">
+    <button class="btn btn-primary" type="submit">Guardar</button>
+    <a class="btn btn-secondary" href="{{ url_for('lista_expedientes') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
