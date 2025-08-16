@@ -1,5 +1,7 @@
-{% extends 'templates/base.html' %}
+{% extends 'base.html' %}
+
 {% block title %}Expediente {{ item.nro_expediente_cpim or item.id }} — CPIM{% endblock %}
+
 {% block content %}
 <div class="d-flex align-items-center mb-3">
   <h3 class="me-auto">Expediente {{ item.nro_expediente_cpim or ('#' ~ item.id) }}</h3>
@@ -17,7 +19,8 @@
     <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
     <tr><th>Comitente</th><td>{{ item.nombre_comitente or '-' }}</td></tr>
     <tr><th>Ubicación</th><td>{{ item.ubicacion or '-' }}</td></tr>
-    <tr><th>Visados</th>
+    <tr>
+      <th>Visados</th>
       <td>
         Gas: {{ 'Sí' if item.visado_gas else 'No' }} | 
         Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} | 
@@ -35,6 +38,29 @@
     <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
     <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
     <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>
+
+    {# --- NUEVOS CAMPOS PARA TRABAJO DIGITAL --- #}
+    {% if item.formato == 'Digital' %}
+      <tr><th>N° GOP</th><td>{{ item.gop_numero or '-' }}</td></tr>
+      <tr>
+        <th>Archivos PDF</th>
+        <td>
+          {% if item.archivos and item.archivos|length > 0 %}
+            <ul>
+              {% for archivo in item.archivos %}
+                <li>
+                  <a href="{{ archivo.url_publica }}" target="_blank">
+                    {{ archivo.nombre_original }}
+                  </a>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            No se han cargado archivos PDF.
+          {% endif %}
+        </td>
+      </tr>
+    {% endif %}
   </tbody>
 </table>
 {% endblock %}

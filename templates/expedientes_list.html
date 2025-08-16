@@ -1,34 +1,70 @@
-{% extends 'templates/base.html' %}
+{% extends 'base.html' %}
 {% block title %}Expedientes — CPIM{% endblock %}
 {% block content %}
+
 <div class="d-flex align-items-center mb-3">
   <h3 class="me-auto">Expedientes</h3>
   <a href="{{ url_for('nuevo_expediente') }}" class="btn btn-primary">+ Nuevo</a>
 </div>
+
 <form class="row g-2 mb-3" method="get">
-  <div class="col-auto">
-    <input class="form-control" type="search" name="q" placeholder="Buscar (N°, profesional, comitente, tipo, ubicación)" value="{{ q }}">
+  <div class="col-sm-6 col-md-5 col-lg-4">
+    <input
+      class="form-control"
+      type="search"
+      name="q"
+      placeholder="Buscar (N°, profesional, comitente, tipo, ubicación)"
+      value="{{ q or '' }}">
   </div>
+
+  <div class="col-sm-4 col-md-3 col-lg-2">
+    <select class="form-select" name="formato" aria-label="Filtrar por formato">
+      <option value="" {{ '' == (formato or '') and 'selected' or '' }}>Todos los formatos</option>
+      <option value="Papel" {{ (formato or '') == 'Papel' and 'selected' or '' }}>Papel</option>
+      <option value="Digital" {{ (formato or '') == 'Digital' and 'selected' or '' }}>Digital</option>
+    </select>
+  </div>
+
   <div class="col-auto">
     <button class="btn btn-outline-secondary" type="submit">Buscar</button>
   </div>
+  <div class="col-auto">
+    <a class="btn btn-outline-dark" href="{{ url_for('lista_expedientes') }}">Borrar filtros</a>
+  </div>
 </form>
-<table class="table table-striped table-hover">
+
+<table class="table table-striped table-hover align-middle">
   <thead>
     <tr>
-      <th>N° CPIM</th>
-      <th>Fecha</th>
+      <th style="width: 140px;">N° CPIM</th>
+      <th style="width: 120px;">Fecha</th>
+      <th style="width: 110px;">Formato</th>
       <th>Profesional</th>
       <th>Comitente</th>
       <th>Tipo de trabajo</th>
-      <th></th>
+      <th class="text-end" style="width: 220px;"></th>
     </tr>
   </thead>
   <tbody>
     {% for it in items.items %}
     <tr>
       <td>{{ it.nro_expediente_cpim or '-' }}</td>
-      <td>{{ it.fecha or '' }}</td>
+      <td>
+        {% if it.fecha %}
+          {{ it.fecha.strftime('%Y-%m-%d') }}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+      <td>
+        {% if it.formato == 'Digital' %}
+          <span class="badge bg-info text-dark">Digital</span>
+        {% elif it.formato == 'Papel' %}
+          <span class="badge bg-secondary">Papel</span>
+        {% else %}
+          <span class="text-muted">—</span>
+        {% endif %}
+      </td>
       <td>{{ it.nombre_profesional or '' }}</td>
       <td>{{ it.nombre_comitente or '' }}</td>
       <td>{{ it.tipo_trabajo or '' }}</td>
@@ -41,20 +77,25 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="7" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>
 
+{% if items.pages > 1 %}
 <nav aria-label="Paginación">
   <ul class="pagination">
-    <li class="page-item {% if not items.has_prev %}disabled{% endif %}">
-      <a class="page-link" href="?q={{ q }}&page={{ items.prev_num }}">Anterior</a>
+    <li class="page-item {{ not items.has_prev and 'disabled' or '' }}">
+      <a class="page-link" href="{{ url_for('lista_expedientes', q=q, formato=formato, page=items.prev_num) }}">Anterior</a>
     </li>
-    <li class="page-item disabled"><span class="page-link">Página {{ items.page }} / {{ items.pages }}</span></li>
-    <li class="page-item {% if not items.has_next %}disabled{% endif %}">
-      <a class="page-link" href="?q={{ q }}&page={{ items.next_num }}">Siguiente</a>
+    <li class="page-item disabled">
+      <span class="page-link">Página {{ items.page }} / {{ items.pages }}</span>
+    </li>
+    <li class="page-item {{ not items.has_next and 'disabled' or '' }}">
+      <a class="page-link" href="{{ url_for('lista_expedientes', q=q, formato=formato, page=items.next_num) }}">Siguiente</a>
     </li>
   </ul>
 </nav>
+{% endif %}
+
 {% endblock %}

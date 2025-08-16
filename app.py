@@ -1,10 +1,15 @@
 import os
+import json
+import uuid
 from datetime import datetime
+
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import or_
 from dotenv import load_dotenv
+from werkzeug.utils import secure_filename
+from google.cloud import storage
 
 # Extensiones globales
 _db = SQLAlchemy()
@@ -24,9 +29,31 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 
+    # Tamaño máximo de subida (por defecto 20 MB). Cambiá con MAX_UPLOAD_MB en .env
+    app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "20")) * 1024 * 1024
+
     db_url = os.getenv("DATABASE_URL", "sqlite:///cpim.db")
     db_url = _normalize_db_url(db_url)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+
+    # Engine options (solo si es Postgres)
+    if db_url.startswith("postgresql"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,      # chequea conexión antes de usarla
+            "pool_recycle": 300,        # recicla conexiones cada 5 min
+            "pool_size": 5,
+            "max_overflow": 0,
+            "connect_args": {
+                # keepalives (psycopg2)
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+                # obliga SSL (en Railway suele ser necesario)
+                "sslmode": "require",
+            },
+        }
+
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     _db.init_app(app)
@@ -40,7 +67,7 @@ def create_app():
         # Básicos
         fecha = _db.Column(_db.Date, nullable=True)
         profesion = _db.Column(_db.String(120), nullable=True)
-        formato = _db.Column(_db.String(50), nullable=True)
+        formato = _db.Column(_db.String(50), nullable=True)  # Papel o Digital
         nro_copias = _db.Column(_db.Integer, nullable=True)
         tipo_trabajo = _db.Column(_db.String(200), nullable=True)
 
@@ -64,6 +91,9 @@ def create_app():
         nro_caja = _db.Column(_db.Integer, nullable=True)
         ruta_carpeta = _db.Column(_db.String(255), nullable=True)
 
+        # Campos de formato Digital
+        gop_numero = _db.Column(_db.String(100), nullable=True)
+
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
         whatsapp_tramitador = _db.Column(_db.String(50), nullable=True)
 
@@ -71,8 +101,25 @@ def create_app():
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
         updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+        # Relación con archivos
+        archivos = _db.relationship("Archivo", backref="expediente", cascade="all, delete-orphan")
+
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
+
+    class Archivo(_db.Model):
+        __tablename__ = "archivos"
+        id = _db.Column(_db.Integer, primary_key=True)
+        expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id"), nullable=False)
+        filename = _db.Column(_db.String(255), nullable=False)
+        gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto o ruta interna
+        public_url = _db.Column(_db.String(512), nullable=True)  # URL pública si se habilita
+        mime_type = _db.Column(_db.String(100), nullable=True)
+        size_bytes = _db.Column(_db.Integer, nullable=True)
+        uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+
+    # Valores permitidos para campos con opciones
+    FORMATO_PERMITIDOS = ["Papel", "Digital"]
 
     # === Rutas ===
     @app.get("/")
@@ -82,6 +129,7 @@ def create_app():
     @app.get("/expedientes")
     def lista_expedientes():
         q = request.args.get("q", "").strip()
+        formato_f = (request.args.get("formato", "").strip().title() or "")
         page = int(request.args.get("page", 1))
         query = Expediente.query
         if q:
@@ -95,19 +143,49 @@ def create_app():
                     Expediente.ubicacion.ilike(like),
                 )
             )
+        if formato_f in FORMATO_PERMITIDOS:
+            query = query.filter(Expediente.formato == formato_f)
+        else:
+            formato_f = ""
         items = query.order_by(Expediente.created_at.desc()).paginate(page=page, per_page=20)
-        return render_template("expedientes_list.html", items=items, q=q)
+        return render_template("expedientes_list.html", items=items, q=q, formato=formato_f)
 
     @app.get("/expedientes/nuevo")
     def nuevo_expediente():
-        return render_template("expediente_form.html", item=None)
+        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS)
 
     @app.post("/expedientes/nuevo")
     def crear_expediente():
         data = _parse_form(request.form)
+
+        # Normalizar/validar formato
+        formato = (data.get("formato") or "").strip().title()
+        if formato not in FORMATO_PERMITIDOS:
+            flash("Formato inválido. Debe ser Papel o Digital.", "danger")
+            return redirect(request.referrer or url_for("nuevo_expediente"))
+        data["formato"] = formato
+
         exp = Expediente(**data)
         _db.session.add(exp)
-        _db.session.commit()
+        try:
+            # Necesitamos ID para asociar archivos
+            _db.session.flush()
+
+            subidos = 0
+            # Si es Digital, subimos PDFs (si vinieron)
+            if formato == "Digital":
+                subidos = _save_pdfs_for_expediente(exp, request.files.getlist("pdfs"))
+                if subidos == 0:
+                    flash("No se adjuntó ningún PDF o no se pudieron subir los archivos.", "warning")
+
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            flash(f"Error guardando en la base: {e}", "danger")
+            return redirect(request.referrer or url_for("nuevo_expediente"))
+
+        if formato == "Digital" and subidos > 0:
+            flash(f"{subidos} archivo(s) PDF subido(s) a GCS.", "success")
         flash("Expediente creado", "success")
         return redirect(url_for("lista_expedientes"))
 
@@ -119,15 +197,36 @@ def create_app():
     @app.get("/expedientes/<int:item_id>/editar")
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
-        return render_template("expediente_form.html", item=item)
+        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS)
 
     @app.post("/expedientes/<int:item_id>/editar")
     def actualizar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
         data = _parse_form(request.form)
+
+        formato = (data.get("formato") or "").strip().title()
+        if formato not in FORMATO_PERMITIDOS:
+            flash("Formato inválido. Debe ser Papel o Digital.", "danger")
+            return redirect(request.referrer or url_for("editar_expediente", item_id=item.id))
+        data["formato"] = formato
+
         for k, v in data.items():
             setattr(item, k, v)
-        _db.session.commit()
+
+        try:
+            subidos = 0
+            # Si es Digital y llegan nuevos PDFs, súbelos
+            if formato == "Digital":
+                subidos = _save_pdfs_for_expediente(item, request.files.getlist("pdfs"))
+
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            flash(f"Error guardando en la base: {e}", "danger")
+            return redirect(request.referrer or url_for("editar_expediente", item_id=item.id))
+
+        if formato == "Digital" and subidos > 0:
+            flash(f"{subidos} archivo(s) PDF subido(s) a GCS.", "success")
         flash("Expediente actualizado", "success")
         return redirect(url_for("detalle_expediente", item_id=item.id))
 
@@ -139,6 +238,7 @@ def create_app():
         flash("Expediente eliminado", "info")
         return redirect(url_for("lista_expedientes"))
 
+    # === Parsers ===
     def _parse_bool(value: str) -> bool:
         return str(value).lower() in {"1", "true", "t", "si", "sí", "on", "x"}
 
@@ -146,11 +246,10 @@ def create_app():
         value = (value or "").strip()
         if not value:
             return None
-        # esperamos formato YYYY-MM-DD desde <input type="date">
+        # intentamos YYYY-MM-DD (input type="date") y luego DD/MM/YYYY
         try:
             return datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
-            # fallback: DD/MM/YYYY
             try:
                 return datetime.strptime(value, "%d/%m/%Y").date()
             except ValueError:
@@ -183,8 +282,106 @@ def create_app():
             "persona_retira": form.get("persona_retira"),
             "nro_caja": _parse_int(form.get("nro_caja")),
             "ruta_carpeta": form.get("ruta_carpeta"),
+            "gop_numero": form.get("gop_numero"),
             "whatsapp_profesional": form.get("whatsapp_profesional"),
             "whatsapp_tramitador": form.get("whatsapp_tramitador"),
         }
+
+    # === Helpers GCS ===
+    def _get_gcs_client():
+        """
+        Obtiene un cliente de GCS.
+        - Si GCS_CREDENTIALS_JSON está definido (contenido JSON), lo usa.
+        - Si no, usa GOOGLE_APPLICATION_CREDENTIALS (ruta) o credenciales por defecto.
+        """
+        creds_json = os.getenv("GCS_CREDENTIALS_JSON")
+        if creds_json:
+            from google.oauth2 import service_account
+            info = json.loads(creds_json)
+            creds = service_account.Credentials.from_service_account_info(info)
+            return storage.Client(credentials=creds)
+        return storage.Client()
+
+    def _upload_pdf_to_gcs(file_storage, dest_prefix: str):
+        """Sube un PDF al bucket configurado y devuelve metadatos."""
+        if not file_storage or not getattr(file_storage, "filename", ""):
+            return None
+
+        filename = secure_filename(file_storage.filename)
+        if not filename:
+            return None
+
+        if not filename.lower().endswith(".pdf"):
+            raise ValueError("Solo se permiten archivos .pdf")
+
+        bucket_name = os.getenv("GCS_BUCKET_NAME")
+        if not bucket_name:
+            raise RuntimeError("Configura GCS_BUCKET_NAME en el entorno")
+
+        client = _get_gcs_client()
+        bucket = client.bucket(bucket_name)
+
+        key = f"{dest_prefix}/{uuid.uuid4().hex}_{filename}"
+        blob = bucket.blob(key)
+
+        # Asegurar que el stream arranque desde el principio
+        try:
+            file_storage.stream.seek(0)
+        except Exception:
+            pass
+
+        # Subir el stream directamente
+        blob.upload_from_file(file_storage.stream, content_type="application/pdf")
+
+        public_url = None
+        if os.getenv("GCS_MAKE_PUBLIC", "true").lower() in {"1", "true", "yes", "si", "sí"}:
+            try:
+                blob.make_public()
+                public_url = blob.public_url
+            except Exception as e:
+                flash(f"Subido a GCS pero no fue posible hacerlo público: {e}", "warning")
+
+        # Tamaño (si se puede calcular)
+        size_bytes = getattr(file_storage, "content_length", None)
+        if size_bytes is None:
+            try:
+                pos = file_storage.stream.tell()
+                file_storage.stream.seek(0, 2)
+                size_bytes = file_storage.stream.tell()
+                file_storage.stream.seek(pos)
+            except Exception:
+                pass
+
+        return {
+            "filename": filename,
+            "gcs_path": f"gs://{bucket_name}/{key}",
+            "public_url": public_url,
+            "size_bytes": size_bytes,
+        }
+
+    def _save_pdfs_for_expediente(expediente, files_list):
+        """Sube PDFs a GCS y crea filas Archivo. Devuelve cuántos subió."""
+        if not files_list:
+            return 0
+        count = 0
+        for f in files_list:
+            try:
+                if not f or not getattr(f, "filename", ""):
+                    continue
+                info = _upload_pdf_to_gcs(f, f"expedientes/{expediente.id}")
+                if info:
+                    _db.session.add(Archivo(
+                        expediente_id=expediente.id,
+                        filename=info["filename"],
+                        gcs_path=info["gcs_path"],
+                        public_url=info.get("public_url"),
+                        mime_type="application/pdf",
+                        size_bytes=info.get("size_bytes"),
+                    ))
+                    count += 1
+            except Exception as e:
+                # No frenamos toda la operación por un archivo, avisamos
+                flash(f"Error subiendo '{getattr(f, 'filename', 'pdf')}' a GCS: {e}", "danger")
+        return count
 
     return app
