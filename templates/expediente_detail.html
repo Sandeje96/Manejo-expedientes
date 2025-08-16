@@ -26,8 +26,14 @@
         Electromecánica: {{ 'Sí' if item.visado_electromecanica else 'No' }}
       </td>
     </tr>
-    <tr><th>Estado pago sellado</th><td>{{ item.estado_pago_sellado or '-' }}</td></tr>
-    <tr><th>Estado pago visado</th><td>{{ item.estado_pago_visado or '-' }}</td></tr>
+    <tr><th>Estado pago sellado</th><td>{{ (item.estado_pago_sellado or 'pendiente')|capitalize }}</td></tr>
+    <tr><th>Estado pago visado</th><td>{{ (item.estado_pago_visado or 'pendiente')|capitalize }}</td></tr>
+    <tr><th>Tasa de sellado</th><td>{{ item.tasa_sellado_monto|ars }}</td></tr>
+    <tr><th>Visado eléctrica</th><td>{{ item.tasa_visado_electrica_monto|ars }}</td></tr>
+    <tr><th>Visado salubridad</th><td>{{ item.tasa_visado_salubridad_monto|ars }}</td></tr>
+    <tr><th>Visado gas</th><td>{{ item.tasa_visado_gas_monto|ars }}</td></tr>
+    <tr><th>Visado electromecánica</th><td>{{ item.tasa_visado_electromecanica_monto|ars }}</td></tr>
+    <tr class="table-secondary"><th>Total visados</th><td>{{ item.total_visados|ars }}</td></tr>
     <tr><th>Fecha de salida</th><td>{{ item.fecha_salida or '-' }}</td></tr>
     <tr><th>Persona que retira</th><td>{{ item.persona_retira or '-' }}</td></tr>
     <tr><th>N° de caja</th><td>{{ item.nro_caja or '-' }}</td></tr>

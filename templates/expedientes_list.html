@@ -42,6 +42,9 @@
       <th>Profesional</th>
       <th>Comitente</th>
       <th>Tipo de trabajo</th>
+      <th style="width: 120px;">GOP</th>
+      <th style="width: 120px;">Sellado</th>
+      <th style="width: 120px;">Visado</th>
       <th class="text-end" style="width: 220px;"></th>
     </tr>
   </thead>
@@ -68,6 +71,34 @@
       <td>{{ it.nombre_profesional or '' }}</td>
       <td>{{ it.nombre_comitente or '' }}</td>
       <td>{{ it.tipo_trabajo or '' }}</td>
+
+      <!-- GOP -->
+      <td>{{ it.gop_numero or '-' }}</td>
+
+      <!-- Estado Sellado -->
+      <td>
+        {% set s = (it.estado_pago_sellado or 'pendiente')|lower %}
+        {% if s == 'pagado' %}
+          <span class="badge text-bg-success">Pagado</span>
+        {% elif s == 'exento' %}
+          <span class="badge text-bg-secondary">Exento</span>
+        {% else %}
+          <span class="badge text-bg-warning text-dark">Pendiente</span>
+        {% endif %}
+      </td>
+
+      <!-- Estado Visado -->
+      <td>
+        {% set v = (it.estado_pago_visado or 'pendiente')|lower %}
+        {% if v == 'pagado' %}
+          <span class="badge text-bg-success">Pagado</span>
+        {% elif v == 'exento' %}
+          <span class="badge text-bg-secondary">Exento</span>
+        {% else %}
+          <span class="badge text-bg-warning text-dark">Pendiente</span>
+        {% endif %}
+      </td>
+
       <td class="text-end">
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
@@ -77,7 +108,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="10" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>

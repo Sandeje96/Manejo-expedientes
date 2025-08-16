@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
 from flask import Flask, render_template, request, redirect, url_for, flash
@@ -9,7 +10,6 @@ from flask_migrate import Migrate
 from sqlalchemy import or_
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-
 
 # Extensiones globales
 _db = SQLAlchemy()
@@ -36,24 +36,40 @@ def create_app():
     db_url = _normalize_db_url(db_url)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
-    # Engine options (seguro para Postgres; SQLite ignora connect_args)
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-        "pool_size": 5,
-        "max_overflow": 0,
-        "connect_args": {
-            "keepalives": 1,
-            "keepalives_idle": 30,
-            "keepalives_interval": 10,
-            "keepalives_count": 5,
-            "sslmode": "require",
-        },
-    }
+    # Engine options (si es Postgres)
+    if db_url.startswith("postgresql"):
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+            "pool_size": 5,
+            "max_overflow": 0,
+            "connect_args": {
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+                "sslmode": "require",
+            },
+        }
+
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     _db.init_app(app)
     _migrate.init_app(app, _db)
+
+    # === Filtro Jinja para formatear moneda ARS ===
+    @app.template_filter("ars")
+    def _fmt_ars(value):
+        if value is None:
+            return "-"
+        try:
+            # Trabaja bien con Decimal
+            n = Decimal(value)
+        except Exception:
+            return "-"
+        s = f"{n:,.2f}"                  # 1,234,567.89
+        s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"$ {s}"
 
     # === Modelos ===
     class Expediente(_db.Model):
@@ -73,15 +89,24 @@ def create_app():
         nombre_comitente = _db.Column(_db.String(200), nullable=True)
         ubicacion = _db.Column(_db.String(255), nullable=True)
 
-        # Estados / visados
+        # (Antiguos) flags de visado — ya no se usan para cálculo, pero los dejamos por compatibilidad
         visado_gas = _db.Column(_db.Boolean, default=False)
         visado_salubridad = _db.Column(_db.Boolean, default=False)
         visado_electrica = _db.Column(_db.Boolean, default=False)
         visado_electromecanica = _db.Column(_db.Boolean, default=False)
 
-        estado_pago_sellado = _db.Column(_db.String(50), nullable=True)  # pendiente/pagado/exento
-        estado_pago_visado = _db.Column(_db.String(50), nullable=True)
+        # Estados de pago (siguen vigentes)
+        estado_pago_sellado = _db.Column(_db.String(50), nullable=False, default="pendiente")
+        estado_pago_visado  = _db.Column(_db.String(50), nullable=False, default="pendiente")
 
+        # NUEVOS: montos de tasas (ARG) — Numeric(12,2)
+        tasa_sellado_monto = _db.Column(_db.Numeric(12, 2), nullable=True)
+        tasa_visado_electrica_monto = _db.Column(_db.Numeric(12, 2), nullable=True)
+        tasa_visado_salubridad_monto = _db.Column(_db.Numeric(12, 2), nullable=True)
+        tasa_visado_gas_monto = _db.Column(_db.Numeric(12, 2), nullable=True)
+        tasa_visado_electromecanica_monto = _db.Column(_db.Numeric(12, 2), nullable=True)
+
+        # Salida / caja / ubicación
         fecha_salida = _db.Column(_db.Date, nullable=True)
         persona_retira = _db.Column(_db.String(200), nullable=True)
         nro_caja = _db.Column(_db.Integer, nullable=True)
@@ -90,6 +115,7 @@ def create_app():
         # Campos de formato Digital
         gop_numero = _db.Column(_db.String(100), nullable=True)
 
+        # Contactos
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
         whatsapp_tramitador = _db.Column(_db.String(50), nullable=True)
 
@@ -100,6 +126,17 @@ def create_app():
         # Relación con archivos
         archivos = _db.relationship("Archivo", backref="expediente", cascade="all, delete-orphan")
 
+        # Conveniencia: total de visados
+        @property
+        def total_visados(self):
+            vals = [
+                self.tasa_visado_electrica_monto,
+                self.tasa_visado_salubridad_monto,
+                self.tasa_visado_gas_monto,
+                self.tasa_visado_electromecanica_monto,
+            ]
+            return sum((v or 0) for v in vals)
+
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
 
@@ -108,14 +145,16 @@ def create_app():
         id = _db.Column(_db.Integer, primary_key=True)
         expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id"), nullable=False)
         filename = _db.Column(_db.String(255), nullable=False)
-        gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto
-        public_url = _db.Column(_db.String(512), nullable=True)  # URL pública (si el bucket lo permite por IAM)
+        gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto o ruta interna
+        public_url = _db.Column(_db.String(512), nullable=True)  # URL pública si se habilita
         mime_type = _db.Column(_db.String(100), nullable=True)
         size_bytes = _db.Column(_db.Integer, nullable=True)
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
 
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
+    ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
+    PROFESIONES_PERMITIDAS = ["Ingeniero/a", "Licenciado/a", "Maestro Mayor de Obras", "Técnico/a"]
 
     # === Rutas ===
     @app.get("/")
@@ -148,13 +187,19 @@ def create_app():
 
     @app.get("/expedientes/nuevo")
     def nuevo_expediente():
-        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS)
+        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
 
     @app.post("/expedientes/nuevo")
     def crear_expediente():
         data = _parse_form(request.form)
+        prof = (data.get("profesion") or "").strip()
+        if prof not in PROFESIONES_PERMITIDAS:
+            # si no coincide, forzamos a vacío para que el form vuelva a mostrarse
+            flash("Profesión inválida. Elegí una opción del desplegable.", "danger")
+            return redirect(request.referrer or url_for("nuevo_expediente"))
+        data["profesion"] = prof
 
-        # Normalizar/validar formato
+        # Validación de formato
         formato = (data.get("formato") or "").strip().title()
         if formato not in FORMATO_PERMITIDOS:
             flash("Formato inválido. Debe ser Papel o Digital.", "danger")
@@ -167,11 +212,9 @@ def create_app():
             # Necesitamos ID para asociar archivos
             _db.session.flush()
 
-            subidos = 0
+            # Si es Digital, subimos PDFs (si vinieron)
             if formato == "Digital":
-                subidos = _save_pdfs_for_expediente(exp, request.files.getlist("pdfs"))
-                if subidos == 0:
-                    flash("No se adjuntó ningún PDF o no se pudieron subir los archivos.", "warning")
+                _save_pdfs_for_expediente(exp, request.files.getlist("pdfs"))
 
             _db.session.commit()
         except Exception as e:
@@ -179,8 +222,6 @@ def create_app():
             flash(f"Error guardando en la base: {e}", "danger")
             return redirect(request.referrer or url_for("nuevo_expediente"))
 
-        if formato == "Digital" and subidos > 0:
-            flash(f"{subidos} archivo(s) PDF subido(s) a GCS.", "success")
         flash("Expediente creado", "success")
         return redirect(url_for("lista_expedientes"))
 
@@ -192,12 +233,18 @@ def create_app():
     @app.get("/expedientes/<int:item_id>/editar")
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
-        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS)
+        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
 
     @app.post("/expedientes/<int:item_id>/editar")
     def actualizar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
         data = _parse_form(request.form)
+        prof = (data.get("profesion") or "").strip()
+        if prof not in PROFESIONES_PERMITIDAS:
+            # si no coincide, forzamos a vacío para que el form vuelva a mostrarse
+            flash("Profesión inválida. Elegí una opción del desplegable.", "danger")
+            return redirect(request.referrer or url_for("nuevo_expediente"))
+        data["profesion"] = prof
 
         formato = (data.get("formato") or "").strip().title()
         if formato not in FORMATO_PERMITIDOS:
@@ -209,17 +256,15 @@ def create_app():
             setattr(item, k, v)
 
         try:
-            subidos = 0
+            # Si es Digital y llegan nuevos PDFs, súbelos
             if formato == "Digital":
-                subidos = _save_pdfs_for_expediente(item, request.files.getlist("pdfs"))
+                _save_pdfs_for_expediente(item, request.files.getlist("pdfs"))
             _db.session.commit()
         except Exception as e:
             _db.session.rollback()
             flash(f"Error guardando en la base: {e}", "danger")
             return redirect(request.referrer or url_for("editar_expediente", item_id=item.id))
 
-        if formato == "Digital" and subidos > 0:
-            flash(f"{subidos} archivo(s) PDF subido(s) a GCS.", "success")
         flash("Expediente actualizado", "success")
         return redirect(url_for("detalle_expediente", item_id=item.id))
 
@@ -254,7 +299,36 @@ def create_app():
         except Exception:
             return None
 
+    def _parse_decimal_ars(value: str):
+        """
+        Acepta:
+          - "1.234,56"  (estándar AR)
+          - "1234.56"   (punto decimal)
+          - "$ 1.234,56" / espacios
+        Devuelve Decimal o None.
+        """
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        s = s.replace("$", "").replace(" ", "")
+        # Si tiene coma como decimal, reemplazar por punto (y quitar miles)
+        if "," in s and "." in s:
+            # asume miles con punto y decimales con coma
+            s = s.replace(".", "").replace(",", ".")
+        elif "," in s:
+            s = s.replace(",", ".")
+        try:
+            return Decimal(s)
+        except (InvalidOperation, ValueError):
+            return None
+
     def _parse_form(form):
+        def _estado_norm(k):
+            v = (form.get(k) or "").strip().lower()
+            return v if v in {"pendiente", "pagado", "exento"} else "pendiente"
+
         return {
             "fecha": _parse_date(form.get("fecha")),
             "profesion": form.get("profesion"),
@@ -269,8 +343,8 @@ def create_app():
             "visado_salubridad": _parse_bool(form.get("visado_salubridad")),
             "visado_electrica": _parse_bool(form.get("visado_electrica")),
             "visado_electromecanica": _parse_bool(form.get("visado_electromecanica")),
-            "estado_pago_sellado": form.get("estado_pago_sellado"),
-            "estado_pago_visado": form.get("estado_pago_visado"),
+            "estado_pago_sellado": _estado_norm("estado_pago_sellado"),
+            "estado_pago_visado": _estado_norm("estado_pago_visado"),
             "fecha_salida": _parse_date(form.get("fecha_salida")),
             "persona_retira": form.get("persona_retira"),
             "nro_caja": _parse_int(form.get("nro_caja")),
@@ -287,6 +361,7 @@ def create_app():
         - Si GCS_CREDENTIALS_JSON está definido (contenido JSON), lo usa.
         - Si no, usa GOOGLE_APPLICATION_CREDENTIALS (ruta) o credenciales por defecto.
         """
+        from google.cloud import storage  # import local
         creds_json = os.getenv("GCS_CREDENTIALS_JSON")
         if creds_json:
             from google.oauth2 import service_account
@@ -297,10 +372,8 @@ def create_app():
 
     def _upload_pdf_to_gcs(file_storage, dest_prefix: str):
         """
-        Sube un PDF a GCS. Con UBLA activado no usamos ACL por objeto.
-        La URL pública se construye como:
+        Sube un PDF a GCS. Para buckets con UBLA, usamos URL pública por IAM:
         https://storage.googleapis.com/<bucket>/<key>
-        (y funciona si el bucket otorga lectura a allUsers por IAM).
         """
         if not file_storage or not getattr(file_storage, "filename", ""):
             return None
@@ -319,11 +392,11 @@ def create_app():
         key = f"{dest_prefix}/{uuid.uuid4().hex}_{filename}"
         blob = bucket.blob(key)
 
-        # Subir el stream directamente (no usar .save en disco)
+        # Subir el stream directamente
         blob.upload_from_file(file_storage.stream, content_type="application/pdf")
 
-        # No llamar a make_public() (UBLA). Construimos URL pública basada en IAM:
-        public_url = f"https://storage.googleapis.com/{bucket_name}/{key}"
+        public_url_candidate = f"https://storage.googleapis.com/{bucket_name}/{key}"
+        public_url = public_url_candidate  # con UBLA + IAM público funciona
 
         return {
             "filename": filename,
@@ -333,28 +406,24 @@ def create_app():
         }
 
     def _save_pdfs_for_expediente(expediente, files_list):
-        """Sube PDFs a GCS y crea filas Archivo. Devuelve cuántos subió."""
+        """Sube PDFs a GCS y crea filas Archivo."""
         if not files_list:
             return 0
         count = 0
         for f in files_list:
-            try:
-                if not f or not getattr(f, "filename", ""):
-                    continue
-                info = _upload_pdf_to_gcs(f, f"expedientes/{expediente.id}")
-                if info:
-                    _db.session.add(Archivo(
-                        expediente_id=expediente.id,
-                        filename=info["filename"],
-                        gcs_path=info["gcs_path"],
-                        public_url=info.get("public_url"),
-                        mime_type="application/pdf",
-                        size_bytes=info.get("size_bytes"),
-                    ))
-                    count += 1
-            except Exception as e:
-                # No frenamos toda la operación por un archivo; avisamos
-                flash(f"Error subiendo '{getattr(f, 'filename', 'pdf')}' a GCS: {e}", "danger")
+            if not f or not getattr(f, "filename", ""):
+                continue
+            info = _upload_pdf_to_gcs(f, f"expedientes/{expediente.id}")
+            if info:
+                _db.session.add(Archivo(
+                    expediente_id=expediente.id,
+                    filename=info["filename"],
+                    gcs_path=info["gcs_path"],
+                    public_url=info.get("public_url"),
+                    mime_type="application/pdf",
+                    size_bytes=info.get("size_bytes"),
+                ))
+                count += 1
         return count
 
     return app

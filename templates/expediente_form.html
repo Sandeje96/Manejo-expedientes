@@ -14,11 +14,18 @@
       value="{% if item and item.fecha %}{{ item.fecha.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
   </div>
 
-  <!-- Profesión -->
+  <!-- Profesión (desplegable) -->
   <div class="col-md-3">
-    <label class="form-label">Profesión</label>
-    <input type="text" name="profesion" class="form-control"
-           value="{{ (item.profesion if item else '') or '' }}">
+    <label for="profesion" class="form-label">Profesión</label>
+    <select id="profesion" name="profesion" class="form-select" required>
+      {% for p in profesiones %}
+        {% if item %}
+          <option value="{{ p }}" {{ 'selected' if item.profesion == p else '' }}>{{ p }}</option>
+        {% else %}
+          <option value="{{ p }}" {{ 'selected' if loop.first else '' }}>{{ p }}</option>
+        {% endif %}
+      {% endfor %}
+    </select>
   </div>
 
   <!-- Formato -->
@@ -77,38 +84,63 @@
            value="{{ (item.ubicacion if item else '') or '' }}">
   </div>
 
-  <!-- Visados -->
-  <div class="col-md-3 form-check mt-4">
-    <input class="form-check-input" type="checkbox" id="visado_gas" name="visado_gas"
-           {{ 'checked' if item and item.visado_gas else '' }}>
-    <label class="form-check-label" for="visado_gas">Visado Gas</label>
+  <!-- ===== Tasas (monto en ARS) ===== -->
+  <div class="col-12"><hr class="mt-4"></div>
+  <h5 class="mb-2">Tasas</h5>
+
+  <div class="col-md-3">
+    <label class="form-label">Tasa de sellado (ARS)</label>
+    <input type="text" name="tasa_sellado_monto" class="form-control" inputmode="decimal"
+          placeholder="$ 0,00" value="{{ item.tasa_sellado_monto|ars if item and item.tasa_sellado_monto }}">
+    <div class="form-text">Ingresá el monto. Acepta 1234.56 o 1.234,56</div>
   </div>
-  <div class="col-md-3 form-check mt-4">
-    <input class="form-check-input" type="checkbox" id="visado_salubridad" name="visado_salubridad"
-           {{ 'checked' if item and item.visado_salubridad else '' }}>
-    <label class="form-check-label" for="visado_salubridad">Visado Salubridad</label>
+
+  <div class="col-md-3">
+    <label class="form-label">Visado Eléctrica (ARS)</label>
+    <input type="text" name="tasa_visado_electrica_monto" class="form-control" inputmode="decimal"
+          placeholder="$ 0,00" value="{{ item.tasa_visado_electrica_monto|ars if item and item.tasa_visado_electrica_monto }}">
   </div>
-  <div class="col-md-3 form-check mt-4">
-    <input class="form-check-input" type="checkbox" id="visado_electrica" name="visado_electrica"
-           {{ 'checked' if item and item.visado_electrica else '' }}>
-    <label class="form-check-label" for="visado_electrica">Visado Eléctrica</label>
+
+  <div class="col-md-3">
+    <label class="form-label">Visado Salubridad (ARS)</label>
+    <input type="text" name="tasa_visado_salubridad_monto" class="form-control" inputmode="decimal"
+          placeholder="$ 0,00" value="{{ item.tasa_visado_salubridad_monto|ars if item and item.tasa_visado_salubridad_monto }}">
   </div>
-  <div class="col-md-3 form-check mt-4">
-    <input class="form-check-input" type="checkbox" id="visado_electromecanica" name="visado_electromecanica"
-           {{ 'checked' if item and item.visado_electromecanica else '' }}>
-    <label class="form-check-label" for="visado_electromecanica">Visado Electromecánica</label>
+
+  <div class="col-md-3">
+    <label class="form-label">Visado Gas (ARS)</label>
+    <input type="text" name="tasa_visado_gas_monto" class="form-control" inputmode="decimal"
+          placeholder="$ 0,00" value="{{ item.tasa_visado_gas_monto|ars if item and item.tasa_visado_gas_monto }}">
   </div>
+
+  <div class="col-md-3">
+    <label class="form-label">Visado Electromecánica (ARS)</label>
+    <input type="text" name="tasa_visado_electromecanica_monto" class="form-control" inputmode="decimal"
+          placeholder="$ 0,00" value="{{ item.tasa_visado_electromecanica_monto|ars if item and item.tasa_visado_electromecanica_monto }}">
+  </div>
+  <!-- ===== Fin Tasas ===== -->
 
   <!-- Estados de pago -->
   <div class="col-md-6">
     <label class="form-label">Estado pago sellado</label>
-    <input type="text" name="estado_pago_sellado" class="form-control"
-           value="{{ (item.estado_pago_sellado if item else '') or '' }}">
+    <select name="estado_pago_sellado" class="form-select" required>
+      {% set opts = estados or ['pendiente','pagado','exento'] %}
+      {% set val = (item.estado_pago_sellado if item and item.estado_pago_sellado else 'pendiente') %}
+      {% for o in opts %}
+        <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
+      {% endfor %}
+    </select>
   </div>
+
   <div class="col-md-6">
     <label class="form-label">Estado pago visado</label>
-    <input type="text" name="estado_pago_visado" class="form-control"
-           value="{{ (item.estado_pago_visado if item else '') or '' }}">
+    <select name="estado_pago_visado" class="form-select" required>
+      {% set opts = estados or ['pendiente','pagado','exento'] %}
+      {% set val = (item.estado_pago_visado if item and item.estado_pago_visado else 'pendiente') %}
+      {% for o in opts %}
+        <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
+      {% endfor %}
+    </select>
   </div>
 
   <!-- Salida -->
