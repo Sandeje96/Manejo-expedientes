@@ -1,7 +1,5 @@
 {% extends 'base.html' %}
-
 {% block title %}Expediente {{ item.nro_expediente_cpim or item.id }} — CPIM{% endblock %}
-
 {% block content %}
 <div class="d-flex align-items-center mb-3">
   <h3 class="me-auto">Expediente {{ item.nro_expediente_cpim or ('#' ~ item.id) }}</h3>
@@ -13,7 +11,7 @@
     <tr><th style="width:260px">Fecha</th><td>{{ item.fecha or '-' }}</td></tr>
     <tr><th>Profesión</th><td>{{ item.profesion or '-' }}</td></tr>
     <tr><th>Formato</th><td>{{ item.formato or '-' }}</td></tr>
-    <tr><th>Nro de Copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
+    <tr><th>N° de copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
     <tr><th>Tipo de trabajo</th><td>{{ item.tipo_trabajo or '-' }}</td></tr>
     <tr><th>N° expediente CPIM</th><td>{{ item.nro_expediente_cpim or '-' }}</td></tr>
     <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
@@ -22,9 +20,9 @@
     <tr>
       <th>Visados</th>
       <td>
-        Gas: {{ 'Sí' if item.visado_gas else 'No' }} | 
-        Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} | 
-        Eléctrica: {{ 'Sí' if item.visado_electrica else 'No' }} | 
+        Gas: {{ 'Sí' if item.visado_gas else 'No' }} |
+        Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} |
+        Eléctrica: {{ 'Sí' if item.visado_electrica else 'No' }} |
         Electromecánica: {{ 'Sí' if item.visado_electromecanica else 'No' }}
       </td>
     </tr>
@@ -32,35 +30,46 @@
     <tr><th>Estado pago visado</th><td>{{ item.estado_pago_visado or '-' }}</td></tr>
     <tr><th>Fecha de salida</th><td>{{ item.fecha_salida or '-' }}</td></tr>
     <tr><th>Persona que retira</th><td>{{ item.persona_retira or '-' }}</td></tr>
-    <tr><th>Nro de Caja</th><td>{{ item.nro_caja or '-' }}</td></tr>
-    <tr><th>Ruta de carpeta</th><td>{{ item.ruta_carpeta or '-' }}</td></tr>
+    <tr><th>N° de caja</th><td>{{ item.nro_caja or '-' }}</td></tr>
+    <tr><th>Ruta carpeta</th><td>{{ item.ruta_carpeta or '-' }}</td></tr>
+
+    {% if item.formato == 'Digital' %}
+    <tr><th>Número de GOP</th><td>{{ item.gop_numero or '-' }}</td></tr>
+    <tr>
+      <th>Archivos PDF</th>
+      <td>
+        {% if item.archivos and item.archivos|length %}
+          <ul class="mb-0">
+            {% for a in item.archivos %}
+              <li>
+                {% set name = a.filename or 'archivo.pdf' %}
+                {% if a.public_url %}
+                  <a href="{{ a.public_url }}" target="_blank" rel="noopener">{{ name }}</a>
+                {% else %}
+                  {# Bucket con UBLA: usamos URL pública basada en IAM #}
+                  {% set parts = a.gcs_path.split('gs://')[-1].split('/', 1) %}
+                  {% set bucket = parts[0] %}
+                  {% set key = parts[1] if parts|length > 1 else '' %}
+                  <a href="https://storage.googleapis.com/{{ bucket }}/{{ key }}" target="_blank" rel="noopener">{{ name }}</a>
+                  <small class="text-muted">(puede requerir permisos públicos del bucket)</small>
+                {% endif %}
+                {% if a.size_bytes %}
+                  <small class="text-muted">— {{ (a.size_bytes / 1024)|round(1) }} KB</small>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <span class="text-muted">Sin archivos adjuntos</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+
     <tr><th>WhatsApp Profesional</th><td>{{ item.whatsapp_profesional or '-' }}</td></tr>
     <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
     <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
     <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>
-
-    {# --- NUEVOS CAMPOS PARA TRABAJO DIGITAL --- #}
-    {% if item.formato == 'Digital' %}
-      <tr><th>N° GOP</th><td>{{ item.gop_numero or '-' }}</td></tr>
-      <tr>
-        <th>Archivos PDF</th>
-        <td>
-          {% if item.archivos and item.archivos|length > 0 %}
-            <ul>
-              {% for archivo in item.archivos %}
-                <li>
-                  <a href="{{ archivo.url_publica }}" target="_blank">
-                    {{ archivo.nombre_original }}
-                  </a>
-                </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            No se han cargado archivos PDF.
-          {% endif %}
-        </td>
-      </tr>
-    {% endif %}
   </tbody>
 </table>
 {% endblock %}

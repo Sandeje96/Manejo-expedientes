@@ -36,24 +36,20 @@ def create_app():
     db_url = _normalize_db_url(db_url)
     app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 
-    # Engine options (solo si es Postgres)
-    if db_url.startswith("postgresql"):
-        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-            "pool_pre_ping": True,      # chequea conexión antes de usarla
-            "pool_recycle": 300,        # recicla conexiones cada 5 min
-            "pool_size": 5,
-            "max_overflow": 0,
-            "connect_args": {
-                # keepalives (psycopg2)
-                "keepalives": 1,
-                "keepalives_idle": 30,
-                "keepalives_interval": 10,
-                "keepalives_count": 5,
-                # obliga SSL (en Railway suele ser necesario)
-                "sslmode": "require",
-            },
-        }
-
+    # Engine options (seguro para Postgres; SQLite ignora connect_args)
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_size": 5,
+        "max_overflow": 0,
+        "connect_args": {
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+            "sslmode": "require",
+        },
+    }
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     _db.init_app(app)
@@ -112,8 +108,8 @@ def create_app():
         id = _db.Column(_db.Integer, primary_key=True)
         expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id"), nullable=False)
         filename = _db.Column(_db.String(255), nullable=False)
-        gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto o ruta interna
-        public_url = _db.Column(_db.String(512), nullable=True)  # URL pública si se habilita
+        gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto
+        public_url = _db.Column(_db.String(512), nullable=True)  # URL pública (si el bucket lo permite por IAM)
         mime_type = _db.Column(_db.String(100), nullable=True)
         size_bytes = _db.Column(_db.Integer, nullable=True)
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
@@ -172,7 +168,6 @@ def create_app():
             _db.session.flush()
 
             subidos = 0
-            # Si es Digital, subimos PDFs (si vinieron)
             if formato == "Digital":
                 subidos = _save_pdfs_for_expediente(exp, request.files.getlist("pdfs"))
                 if subidos == 0:
@@ -215,10 +210,8 @@ def create_app():
 
         try:
             subidos = 0
-            # Si es Digital y llegan nuevos PDFs, súbelos
             if formato == "Digital":
                 subidos = _save_pdfs_for_expediente(item, request.files.getlist("pdfs"))
-
             _db.session.commit()
         except Exception as e:
             _db.session.rollback()
@@ -303,14 +296,16 @@ def create_app():
         return storage.Client()
 
     def _upload_pdf_to_gcs(file_storage, dest_prefix: str):
-        """Sube un PDF al bucket configurado y devuelve metadatos."""
+        """
+        Sube un PDF a GCS. Con UBLA activado no usamos ACL por objeto.
+        La URL pública se construye como:
+        https://storage.googleapis.com/<bucket>/<key>
+        (y funciona si el bucket otorga lectura a allUsers por IAM).
+        """
         if not file_storage or not getattr(file_storage, "filename", ""):
             return None
 
         filename = secure_filename(file_storage.filename)
-        if not filename:
-            return None
-
         if not filename.lower().endswith(".pdf"):
             raise ValueError("Solo se permiten archivos .pdf")
 
@@ -324,39 +319,17 @@ def create_app():
         key = f"{dest_prefix}/{uuid.uuid4().hex}_{filename}"
         blob = bucket.blob(key)
 
-        # Asegurar que el stream arranque desde el principio
-        try:
-            file_storage.stream.seek(0)
-        except Exception:
-            pass
-
-        # Subir el stream directamente
+        # Subir el stream directamente (no usar .save en disco)
         blob.upload_from_file(file_storage.stream, content_type="application/pdf")
 
-        public_url = None
-        if os.getenv("GCS_MAKE_PUBLIC", "true").lower() in {"1", "true", "yes", "si", "sí"}:
-            try:
-                blob.make_public()
-                public_url = blob.public_url
-            except Exception as e:
-                flash(f"Subido a GCS pero no fue posible hacerlo público: {e}", "warning")
-
-        # Tamaño (si se puede calcular)
-        size_bytes = getattr(file_storage, "content_length", None)
-        if size_bytes is None:
-            try:
-                pos = file_storage.stream.tell()
-                file_storage.stream.seek(0, 2)
-                size_bytes = file_storage.stream.tell()
-                file_storage.stream.seek(pos)
-            except Exception:
-                pass
+        # No llamar a make_public() (UBLA). Construimos URL pública basada en IAM:
+        public_url = f"https://storage.googleapis.com/{bucket_name}/{key}"
 
         return {
             "filename": filename,
             "gcs_path": f"gs://{bucket_name}/{key}",
             "public_url": public_url,
-            "size_bytes": size_bytes,
+            "size_bytes": getattr(file_storage, "content_length", None),
         }
 
     def _save_pdfs_for_expediente(expediente, files_list):
@@ -380,7 +353,7 @@ def create_app():
                     ))
                     count += 1
             except Exception as e:
-                # No frenamos toda la operación por un archivo, avisamos
+                # No frenamos toda la operación por un archivo; avisamos
                 flash(f"Error subiendo '{getattr(f, 'filename', 'pdf')}' a GCS: {e}", "danger")
         return count
 
