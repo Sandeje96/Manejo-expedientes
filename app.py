@@ -9,7 +9,7 @@ from flask_migrate import Migrate
 from sqlalchemy import or_
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
-from google.cloud import storage
+
 
 # Extensiones globales
 _db = SQLAlchemy()
