@@ -3,7 +3,7 @@ import os
 
 BASE = "https://posadas.gestiondeobrasprivadas.com.ar"
 LOGIN_URL = f"{BASE}/frontend/web/site/login"
-MY_TRAYS_URL = f"{BASE}/frontend/web/site/my-trays"
+MY_TRAYS_URL = f"{BASE}/frontend/web/formality/index-all"
 
 USER = os.getenv("USER_MUNI", "")
 PASS = os.getenv("PASS_MUNI", "")

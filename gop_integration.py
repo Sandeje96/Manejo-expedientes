@@ -47,7 +47,7 @@ def _run_scraper_direct():
     # Configuración
     BASE = "https://posadas.gestiondeobrasprivadas.com.ar"
     LOGIN_URL = f"{BASE}/frontend/web/site/login"
-    MY_TRAYS_URL = f"{BASE}/frontend/web/site/my-trays"
+    MY_TRAYS_URL = f"{BASE}/frontend/web/formality/index-all"
     HEADLESS = os.getenv("HEADLESS", "false").lower() == "true"  # Cambiar a false para debug
     
     # Directorio de salida
