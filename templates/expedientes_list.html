@@ -4,7 +4,15 @@
 
 <div class="d-flex align-items-center mb-3">
   <h3 class="me-auto">Expedientes</h3>
-  <a href="{{ url_for('nuevo_expediente') }}" class="btn btn-primary">+ Nuevo</a>
+  <div class="btn-group" role="group">
+    <a href="{{ url_for('nuevo_expediente') }}" class="btn btn-primary">+ Nuevo</a>
+    <form method="post" action="{{ url_for('sincronizar_gop') }}" class="d-inline">
+      <button type="submit" class="btn btn-outline-info" onclick="return confirm('¿Ejecutar sincronización con GOP? Esto puede tomar unos minutos.')">
+        🔄 Sincronizar GOP
+      </button>
+    </form>
+    <a href="{{ url_for('estado_gop') }}" class="btn btn-outline-secondary">Estado GOP</a>
+  </div>
 </div>
 
 <form class="row g-2 mb-3" method="get">
@@ -33,6 +41,7 @@
   </div>
 </form>
 
+<div class="table-responsive">
 <table class="table table-striped table-hover align-middle">
   <thead>
     <tr>
@@ -43,6 +52,8 @@
       <th>Comitente</th>
       <th>Tipo de trabajo</th>
       <th style="width: 120px;">GOP</th>
+      <th style="width: 150px;">Bandeja GOP</th>
+      <th style="width: 120px;">Usuario GOP</th>
       <th style="width: 120px;">Sellado</th>
       <th style="width: 120px;">Visado</th>
       <th class="text-end" style="width: 220px;"></th>
@@ -73,7 +84,38 @@
       <td>{{ it.tipo_trabajo or '' }}</td>
 
       <!-- GOP -->
-      <td>{{ it.gop_numero or '-' }}</td>
+      <td>
+        {% if it.gop_numero %}
+          <span class="badge bg-primary">{{ it.gop_numero }}</span>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+
+      <!-- Bandeja GOP -->
+      <td>
+        {% if it.gop_bandeja_actual %}
+          <small class="text-success">{{ it.gop_bandeja_actual }}</small>
+          {% if it.gop_ultima_sincronizacion %}
+            <br><small class="text-muted">{{ it.gop_ultima_sincronizacion.strftime('%d/%m %H:%M') }}</small>
+          {% endif %}
+        {% elif it.gop_numero %}
+          <small class="text-warning">Sin sincronizar</small>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+
+      <!-- Usuario GOP -->
+      <td>
+        {% if it.gop_usuario_asignado %}
+          <small class="text-info">{{ it.gop_usuario_asignado }}</small>
+        {% elif it.gop_numero %}
+          <small class="text-warning">-</small>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
 
       <!-- Estado Sellado -->
       <td>
@@ -108,10 +150,11 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="10" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="12" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 {% if items.pages > 1 %}
 <nav aria-label="Paginación">

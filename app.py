@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from datetime import datetime, date
 
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -10,6 +10,7 @@ from flask_migrate import Migrate
 from sqlalchemy import or_
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+
 
 # Extensiones globales
 _db = SQLAlchemy()
@@ -116,6 +117,13 @@ def create_app():
 
         # Campos de formato Digital
         gop_numero = _db.Column(_db.String(100), nullable=True)
+
+        # Nuevos campos GOP (información del scraper)
+        gop_bandeja_actual = _db.Column(_db.String(200), nullable=True)
+        gop_usuario_asignado = _db.Column(_db.String(200), nullable=True)
+        gop_estado = _db.Column(_db.String(100), nullable=True)
+        gop_fecha_entrada = _db.Column(_db.Date, nullable=True)
+        gop_ultima_sincronizacion = _db.Column(_db.DateTime, nullable=True)
 
         # Contactos
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
@@ -236,6 +244,58 @@ def create_app():
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
         return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
+    
+    @app.post("/gop/sincronizar")
+    def sincronizar_gop():
+        """Ejecuta el scraper GOP y actualiza expedientes."""
+        try:
+            from gop_integration import sync_gop_data
+            stats = sync_gop_data()
+            
+            if 'error' in stats:
+                flash(f"Error en la sincronización: {stats['error']}", "danger")
+            else:
+                mensaje = (f"Sincronización completada. "
+                          f"Encontrados: {stats['total_gop_encontrados']} GOP, "
+                          f"Actualizados: {stats['expedientes_actualizados']} expedientes")
+                
+                if stats['expedientes_no_encontrados'] > 0:
+                    mensaje += f", No encontrados: {stats['expedientes_no_encontrados']}"
+                
+                if stats['errores']:
+                    mensaje += f", Errores: {len(stats['errores'])}"
+                    flash(mensaje, "warning")
+                else:
+                    flash(mensaje, "success")
+            
+        except Exception as e:
+            flash(f"Error ejecutando sincronización: {e}", "danger")
+        
+        return redirect(url_for("lista_expedientes"))
+
+    @app.get("/gop/estado")
+    def estado_gop():
+        """Muestra estadísticas de sincronización GOP."""
+        # Contar expedientes con y sin datos GOP usando SQL directo
+        total_con_gop = _db.session.execute(
+            _db.text("SELECT COUNT(*) FROM expedientes WHERE gop_numero IS NOT NULL AND gop_numero != ''")
+        ).scalar()
+        
+        total_sincronizados = _db.session.execute(
+            _db.text("SELECT COUNT(*) FROM expedientes WHERE gop_ultima_sincronizacion IS NOT NULL")
+        ).scalar()
+        
+        ultima_sync = _db.session.execute(
+            _db.text("SELECT MAX(gop_ultima_sincronizacion) FROM expedientes")
+        ).scalar()
+        
+        stats = {
+            'total_con_gop': total_con_gop,
+            'total_sincronizados': total_sincronizados,
+            'ultima_sincronizacion': ultima_sync
+        }
+        
+        return render_template("gop_estado.html", stats=stats)
 
     @app.post("/expedientes/<int:item_id>/editar")
     def actualizar_expediente(item_id: int):

@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}Estado GOP — CPIM{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center mb-3">
+  <h3 class="me-auto">Estado de Sincronización GOP</h3>
+  <a href="{{ url_for('lista_expedientes') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Estadísticas</h5>
+      </div>
+      <div class="card-body">
+        <table class="table table-borderless">
+          <tr>
+            <th>Expedientes con número GOP:</th>
+            <td class="text-end">{{ stats.total_con_gop }}</td>
+          </tr>
+          <tr>
+            <th>Expedientes sincronizados:</th>
+            <td class="text-end">
+              {% if stats.total_sincronizados > 0 %}
+                <span class="badge bg-success">{{ stats.total_sincronizados }}</span>
+              {% else %}
+                <span class="badge bg-warning">{{ stats.total_sincronizados }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th>Última sincronización:</th>
+            <td class="text-end">
+              {% if stats.ultima_sincronizacion %}
+                {{ stats.ultima_sincronizacion.strftime('%d/%m/%Y %H:%M:%S') }}
+              {% else %}
+                <span class="text-muted">Nunca</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h5 class="card-title mb-0">Acciones</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('sincronizar_gop') }}">
+          <button type="submit" class="btn btn-primary mb-2 w-100" 
+                  onclick="return confirm('¿Ejecutar sincronización con GOP? Esto puede tomar unos minutos.')">
+            🔄 Ejecutar Sincronización
+          </button>
+        </form>
+        
+        <div class="alert alert-info mb-0">
+          <small>
+            <strong>Nota:</strong> La sincronización descarga los datos del sistema GOP de Posadas 
+            y actualiza los expedientes que tienen número GOP asignado.
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mt-4">
+  <div class="card">
+    <div class="card-header">
+      <h5 class="card-title mb-0">Información del Proceso</h5>
+    </div>
+    <div class="card-body">
+      <h6>¿Cómo funciona la sincronización?</h6>
+      <ol>
+        <li>Se conecta al sistema GOP de Posadas usando las credenciales configuradas</li>
+        <li>Extrae la información de la tabla "Mis Bandejas"</li>
+        <li>Busca expedientes en el CPIM que tengan el mismo número GOP</li>
+        <li>Actualiza los campos: bandeja actual, usuario asignado, estado y fecha de entrada</li>
+      </ol>
+      
+      <h6 class="mt-3">Campos que se sincronizan:</h6>
+      <ul>
+        <li><strong>Bandeja Actual:</strong> En qué bandeja se encuentra el expediente en GOP</li>
+        <li><strong>Usuario Asignado:</strong> Quién tiene asignado el expediente</li>
+        <li><strong>Estado:</strong> Estado actual del expediente en GOP</li>
+        <li><strong>Fecha de Entrada:</strong> Cuándo ingresó el expediente al sistema GOP</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
