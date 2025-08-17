@@ -84,6 +84,18 @@
            value="{{ (item.ubicacion if item else '') or '' }}">
   </div>
 
+  <div class="col-12">
+    <label class="form-label">Partida Inmobiliaria</label>
+    <input type="text" name="partida_inmobiliaria" class="form-control"
+           value="{{ item.partida_inmobiliaria if item }}">
+  </div>
+
+  <div class="mb-3">
+    <label for="nro_expediente_municipal" class="form-label">Número de Expediente Municipal</label>
+    <input type="text" class="form-control" id="nro_expediente_municipal" name="nro_expediente_municipal"
+          value="{{ item.nro_expediente_municipal or '' }}">
+  </div>
+
   <!-- ===== Tasas (monto en ARS) ===== -->
   <div class="col-12"><hr class="mt-4"></div>
   <h5 class="mb-2">Tasas</h5>

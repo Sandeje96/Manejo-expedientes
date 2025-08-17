@@ -88,6 +88,8 @@ def create_app():
         nombre_profesional = _db.Column(_db.String(200), nullable=True)
         nombre_comitente = _db.Column(_db.String(200), nullable=True)
         ubicacion = _db.Column(_db.String(255), nullable=True)
+        partida_inmobiliaria = _db.Column(_db.String(100), nullable=True)
+        nro_expediente_municipal = _db.Column(_db.String(100), nullable=True)
 
         # (Antiguos) flags de visado — ya no se usan para cálculo, pero los dejamos por compatibilidad
         visado_gas = _db.Column(_db.Boolean, default=False)
@@ -339,6 +341,8 @@ def create_app():
             "nombre_profesional": form.get("nombre_profesional"),
             "nombre_comitente": form.get("nombre_comitente"),
             "ubicacion": form.get("ubicacion"),
+            "partida_inmobiliaria": form.get("partida_inmobiliaria"),  # <— NUEVO
+            "nro_expediente_municipal": form.get("nro_expediente_municipal"),  # <— NUEVO
             "visado_gas": _parse_bool(form.get("visado_gas")),
             "visado_salubridad": _parse_bool(form.get("visado_salubridad")),
             "visado_electrica": _parse_bool(form.get("visado_electrica")),
