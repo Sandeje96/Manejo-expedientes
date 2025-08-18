@@ -322,6 +322,22 @@ def sync_gop_data():
                         except Exception as e:
                             stats['errores'].append(f"Error parseando fecha para GOP {gop_numero}: {e}")
                     
+                    # Determinar usuario según la fuente
+                    fuente = datos.get('fuente', 'Desconocido')
+                    if fuente == 'Mis Bandejas':
+                        # Usar el usuario real del scraper
+                        usuario_gop = str(datos.get('usuario_asignado', ''))[:200]
+                        stats['desde_mis_bandejas'] += 1
+                    elif fuente == 'Todos los Trámites':
+                        # Usar "Profesional" por defecto
+                        usuario_gop = "Profesional"
+                        stats['desde_todos_tramites'] += 1
+                    else:
+                        # Fallback para fuentes desconocidas
+                        usuario_gop = str(datos.get('usuario_asignado', ''))[:200]
+                    
+                    current_app.logger.info(f"GOP {gop_numero} - Fuente: {fuente}, Usuario asignado: {usuario_gop}")
+                    
                     # Actualizar campos GOP
                     _db.session.execute(
                         _db.text("""
@@ -335,20 +351,13 @@ def sync_gop_data():
                         """),
                         {
                             "bandeja": str(datos.get('bandeja_actual', ''))[:200],
-                            "usuario": str(datos.get('usuario_asignado', ''))[:200],
+                            "usuario": usuario_gop,  # Usar el usuario determinado según la fuente
                             "estado": str(datos.get('estado', ''))[:100],
                             "fecha_entrada": fecha_entrada,
                             "sync_time": datetime.utcnow(),
                             "expediente_id": expediente_id[0]
                         }
                     )
-                    
-                    # Contar por fuente
-                    fuente = datos.get('fuente', 'Desconocido')
-                    if fuente == 'Mis Bandejas':
-                        stats['desde_mis_bandejas'] += 1
-                    elif fuente == 'Todos los Trámites':
-                        stats['desde_todos_tramites'] += 1
                     
                     stats['expedientes_actualizados'] += 1
                     
@@ -680,7 +689,13 @@ def _buscar_gops_en_pagina(page, gops_buscados, fuente):
                             "fuente": fuente
                         }
                         
-                        current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario={encontrados[nro_sistema]['usuario_asignado']}")
+                        # Log específico según la fuente
+                        if fuente == "Mis Bandejas":
+                            current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario={encontrados[nro_sistema]['usuario_asignado']} (desde Mis Bandejas)")
+                        else:
+                            current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario=Profesional (forzado desde Todos los Trámites)")
+                        
+                        current_app.logger.info(f"  Estado: {encontrados[nro_sistema]['estado']}, Profesional: {encontrados[nro_sistema]['profesional']}")
                         
             except Exception as e:
                 current_app.logger.warning(f"[{fuente}] Error procesando fila {i}: {e}")
