@@ -259,6 +259,10 @@ def create_app():
                           f"Encontrados: {stats['total_gop_encontrados']} GOP, "
                           f"Actualizados: {stats['expedientes_actualizados']} expedientes")
                 
+                # Agregar detalles de fuentes
+                if stats.get('desde_mis_bandejas', 0) > 0 or stats.get('desde_todos_tramites', 0) > 0:
+                    mensaje += f" (Mis Bandejas: {stats.get('desde_mis_bandejas', 0)}, Todos: {stats.get('desde_todos_tramites', 0)})"
+                
                 if stats['expedientes_no_encontrados'] > 0:
                     mensaje += f", No encontrados: {stats['expedientes_no_encontrados']}"
                 
