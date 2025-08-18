@@ -123,6 +123,7 @@ def create_app():
         gop_usuario_asignado = _db.Column(_db.String(200), nullable=True)
         gop_estado = _db.Column(_db.String(100), nullable=True)
         gop_fecha_entrada = _db.Column(_db.Date, nullable=True)
+        gop_fecha_en_bandeja = _db.Column(_db.Date, nullable=True)  # NUEVO CAMPO
         gop_ultima_sincronizacion = _db.Column(_db.DateTime, nullable=True)
 
         # Contactos

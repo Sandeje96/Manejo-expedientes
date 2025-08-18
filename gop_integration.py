@@ -313,13 +313,85 @@ def sync_gop_data():
                     fecha_str = str(datos.get('fecha_entrada', '')).strip()
                     if fecha_str and fecha_str != 'nan':
                         try:
+                            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'):
+                                try:
+                                    if 'T' in fecha_str or ':' in fecha_str:
+                                        # Si tiene formato datetime, extraer solo la fecha
+                                        fecha_entrada = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
+                                    else:
+                                        fecha_entrada = datetime.strptime(fecha_str, fmt).date()
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception as e:
+                            stats['errores'].append(f"Error parseando fecha_entrada para GOP {gop_numero}: {e}")
+                    
+                    # Parsear fecha_en_bandeja si existe (NUEVO)
+                    fecha_en_bandeja = None
+                    fecha_bandeja_str = str(datos.get('fecha_en_bandeja', '')).strip()
+                    if fecha_bandeja_str and fecha_bandeja_str != 'nan':
+                        try:
+                            for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d %H:%M:%S'):
+                                try:
+                                    if 'T' in fecha_bandeja_str or ':' in fecha_bandeja_str:
+                                        # Si tiene formato datetime, extraer solo la fecha
+                                        fecha_en_bandeja = datetime.strptime(fecha_bandeja_str[:10], '%Y-%m-%d').date()
+                                    else:
+                                        fecha_en_bandeja = datetime.strptime(fecha_bandeja_str, fmt).date()
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception as e:
+                            stats['errores'].append(f"Error parseando fecha_en_bandeja para GOP {gop_numero}: {e}")
+                    
+                    # Determinar usuario según la fuente
+                    fuente = datos.get('fuente', 'Desconocido')
+                    if fuente == 'Mis Bandejas':
+                        # Usar el usuario real del scraper
+                        usuario_gop = str(datos.get('usuario_asignado', ''))[:200]
+                        stats['desde_mis_bandejas'] += 1
+                    elif fuente == 'Todos los Trámites':
+                        # Usar "Profesional" por defecto
+                        usuario_gop = "Profesional"
+                        stats['desde_todos_tramites'] += 1
+                    else:
+                        # Fallback para fuentes desconocidas
+                        usuario_gop = str(datos.get('usuario_asignado', ''))[:200]
+                    
+                    current_app.logger.info(f"GOP {gop_numero} - Fuente: {fuente}, Usuario asignado: {usuario_gop}")
+                    current_app.logger.info(f"  Fecha entrada: {fecha_entrada}, Fecha en bandeja: {fecha_en_bandeja}")
+                    
+                    # Actualizar campos GOP (incluyendo el nuevo campo)
+                    _db.session.execute(
+                        _db.text("""
+                            UPDATE expedientes 
+                            SET gop_bandeja_actual = :bandeja,
+                                gop_usuario_asignado = :usuario,
+                                gop_estado = :estado,
+                                gop_fecha_entrada = :fecha_entrada,
+                                gop_fecha_en_bandeja = :fecha_en_bandeja,
+                                gop_ultima_sincronizacion = :sync_time
+                            WHERE id = :expediente_id
+                        """),
+                        {
+                            "bandeja": str(datos.get('bandeja_actual', ''))[:200],
+                            "usuario": usuario_gop,  # Usar el usuario determinado según la fuente
+                            "estado": str(datos.get('estado', ''))[:100],
+                            "fecha_entrada": fecha_entrada,
+                            "fecha_en_bandeja": fecha_en_bandeja,  # NUEVO CAMPO
+                            "sync_time": datetime.utcnow(),
+                            "expediente_id": expediente_id[0]
+                        }
+                    
+                    )
+                    try:
                             for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
                                 try:
                                     fecha_entrada = datetime.strptime(fecha_str, fmt).date()
                                     break
                                 except ValueError:
                                     continue
-                        except Exception as e:
+                    except Exception as e:
                             stats['errores'].append(f"Error parseando fecha para GOP {gop_numero}: {e}")
                     
                     # Determinar usuario según la fuente
@@ -676,6 +748,16 @@ def _buscar_gops_en_pagina(page, gops_buscados, fuente):
                     if nro_sistema in gops_buscados:
                         current_app.logger.info(f"[{fuente}] ¡Encontrado GOP {nro_sistema}!")
                         
+                        # Extraer datos según la fuente (índices diferentes)
+                        if fuente == "Mis Bandejas":
+                            # Índices para "Mis Bandejas"
+                            fecha_en_bandeja = cells.nth(6).inner_text().strip() if cell_count > 6 else ""  # Índice 6
+                            usuario_asignado = cells.nth(7).inner_text().strip() if cell_count > 7 else ""
+                        else:
+                            # Índices para "Todos los Trámites"
+                            fecha_en_bandeja = cells.nth(7).inner_text().strip() if cell_count > 7 else ""  # Índice 7
+                            usuario_asignado = cells.nth(8).inner_text().strip() if cell_count > 8 else ""
+                        
                         # Extraer todos los datos
                         encontrados[nro_sistema] = {
                             "nro_sistema": nro_sistema,
@@ -684,16 +766,19 @@ def _buscar_gops_en_pagina(page, gops_buscados, fuente):
                             "profesional": cells.nth(3).inner_text().strip() if cell_count > 3 else "",
                             "nomenclatura": cells.nth(4).inner_text().strip() if cell_count > 4 else "",
                             "bandeja_actual": cells.nth(5).inner_text().strip() if cell_count > 5 else "",
-                            "fecha_entrada": cells.nth(6).inner_text().strip() if cell_count > 6 else "",
-                            "usuario_asignado": cells.nth(7).inner_text().strip() if cell_count > 7 else "",
+                            "fecha_entrada": cells.nth(6).inner_text().strip() if cell_count > 6 else "",  # Original
+                            "fecha_en_bandeja": fecha_en_bandeja,  # NUEVO CAMPO según fuente
+                            "usuario_asignado": usuario_asignado,  # Ajustado según fuente
                             "fuente": fuente
                         }
                         
                         # Log específico según la fuente
                         if fuente == "Mis Bandejas":
                             current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario={encontrados[nro_sistema]['usuario_asignado']} (desde Mis Bandejas)")
+                            current_app.logger.info(f"  Fecha en bandeja (índice 6): {fecha_en_bandeja}")
                         else:
                             current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario=Profesional (forzado desde Todos los Trámites)")
+                            current_app.logger.info(f"  Fecha en bandeja (índice 7): {fecha_en_bandeja}")
                         
                         current_app.logger.info(f"  Estado: {encontrados[nro_sistema]['estado']}, Profesional: {encontrados[nro_sistema]['profesional']}")
                         

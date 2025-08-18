@@ -41,22 +41,24 @@
   </div>
 </form>
 
-<div class="table-responsive">
-<table class="table table-striped table-hover align-middle">
+<!-- Tabla más ancha con scroll horizontal -->
+<div class="table-responsive" style="overflow-x: auto;">
+<table class="table table-striped table-hover align-middle" style="min-width: 1400px;">
   <thead>
     <tr>
-      <th style="width: 140px;">N° CPIM</th>
-      <th style="width: 120px;">Fecha</th>
-      <th style="width: 110px;">Formato</th>
-      <th>Profesional</th>
-      <th>Comitente</th>
-      <th>Tipo de trabajo</th>
-      <th style="width: 120px;">GOP</th>
-      <th style="width: 150px;">Bandeja GOP</th>
-      <th style="width: 120px;">Usuario GOP</th>
-      <th style="width: 120px;">Sellado</th>
-      <th style="width: 120px;">Visado</th>
-      <th class="text-end" style="width: 220px;"></th>
+      <th style="width: 130px;">N° CPIM</th>
+      <th style="width: 110px;">Fecha</th>
+      <th style="width: 100px;">Formato</th>
+      <th style="width: 180px;">Profesional</th>
+      <th style="width: 180px;">Comitente</th>
+      <th style="width: 200px;">Tipo de trabajo</th>
+      <th style="width: 100px;">GOP</th>
+      <th style="width: 160px;">Bandeja GOP</th>
+      <th style="width: 130px;">Usuario GOP</th>
+      <th style="width: 120px;">Fecha en Bandeja</th>
+      <th style="width: 100px;">Sellado</th>
+      <th style="width: 100px;">Visado</th>
+      <th class="text-end" style="width: 240px;"></th>
     </tr>
   </thead>
   <tbody>
@@ -65,7 +67,7 @@
       <td>{{ it.nro_expediente_cpim or '-' }}</td>
       <td>
         {% if it.fecha %}
-          {{ it.fecha.strftime('%Y-%m-%d') }}
+          {{ it.fecha.strftime('%d/%m/%Y') }}
         {% else %}
           —
         {% endif %}
@@ -79,9 +81,15 @@
           <span class="text-muted">—</span>
         {% endif %}
       </td>
-      <td>{{ it.nombre_profesional or '' }}</td>
-      <td>{{ it.nombre_comitente or '' }}</td>
-      <td>{{ it.tipo_trabajo or '' }}</td>
+      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_profesional or '' }}">
+        {{ it.nombre_profesional or '' }}
+      </td>
+      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_comitente or '' }}">
+        {{ it.nombre_comitente or '' }}
+      </td>
+      <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.tipo_trabajo or '' }}">
+        {{ it.tipo_trabajo or '' }}
+      </td>
 
       <!-- GOP -->
       <td>
@@ -93,9 +101,9 @@
       </td>
 
       <!-- Bandeja GOP -->
-      <td>
+      <td style="max-width: 160px;">
         {% if it.gop_bandeja_actual %}
-          <small class="text-success">{{ it.gop_bandeja_actual }}</small>
+          <small class="text-success" style="word-break: break-word;">{{ it.gop_bandeja_actual }}</small>
           {% if it.gop_ultima_sincronizacion %}
             <br><small class="text-muted">{{ it.gop_ultima_sincronizacion.strftime('%d/%m %H:%M') }}</small>
           {% endif %}
@@ -109,7 +117,18 @@
       <!-- Usuario GOP -->
       <td>
         {% if it.gop_usuario_asignado %}
-          <small class="text-info">{{ it.gop_usuario_asignado }}</small>
+          <small class="text-info" style="word-break: break-word;">{{ it.gop_usuario_asignado }}</small>
+        {% elif it.gop_numero %}
+          <small class="text-warning">-</small>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+
+      <!-- NUEVA COLUMNA: Fecha en Bandeja -->
+      <td>
+        {% if it.gop_fecha_en_bandeja %}
+          <small class="text-primary">{{ it.gop_fecha_en_bandeja.strftime('%d/%m/%Y') }}</small>
         {% elif it.gop_numero %}
           <small class="text-warning">-</small>
         {% else %}
@@ -150,7 +169,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="12" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="13" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>
