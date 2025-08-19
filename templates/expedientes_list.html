@@ -43,7 +43,7 @@
 
 <!-- Tabla más ancha con scroll horizontal -->
 <div class="table-responsive" style="overflow-x: auto;">
-<table class="table table-striped table-hover align-middle" style="min-width: 1400px;">
+<table class="table table-striped table-hover align-middle" style="min-width: 1520px;">
   <thead>
     <tr>
       <th style="width: 130px;">N° CPIM</th>
@@ -51,19 +51,21 @@
       <th style="width: 100px;">Formato</th>
       <th style="width: 180px;">Profesional</th>
       <th style="width: 180px;">Comitente</th>
-      <th style="width: 200px;">Tipo de trabajo</th>
+      <th style="width: 120px;">Fecha de Pago</th>
       <th style="width: 100px;">GOP</th>
       <th style="width: 160px;">Bandeja GOP</th>
       <th style="width: 130px;">Usuario GOP</th>
       <th style="width: 120px;">Fecha en Bandeja</th>
+      <th style="width: 100px;">Días en Bandeja</th> <!-- NUEVA COLUMNA -->
       <th style="width: 100px;">Sellado</th>
       <th style="width: 100px;">Visado</th>
+      <th style="width: 120px;">Fecha Finalizado</th>
       <th class="text-end" style="width: 240px;"></th>
     </tr>
   </thead>
   <tbody>
     {% for it in items.items %}
-    <tr>
+    <tr class="{% if it.finalizado %}table-secondary opacity-50{% endif %}">
       <td>{{ it.nro_expediente_cpim or '-' }}</td>
       <td>
         {% if it.fecha %}
@@ -87,8 +89,12 @@
       <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_comitente or '' }}">
         {{ it.nombre_comitente or '' }}
       </td>
-      <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.tipo_trabajo or '' }}">
-        {{ it.tipo_trabajo or '' }}
+      <td>
+        {% if it.fecha_salida %}
+          {{ it.fecha_salida.strftime('%d/%m/%Y') }}
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
       </td>
 
       <!-- GOP -->
@@ -125,10 +131,28 @@
         {% endif %}
       </td>
 
-      <!-- NUEVA COLUMNA: Fecha en Bandeja -->
+      <!-- Fecha en Bandeja -->
       <td>
         {% if it.gop_fecha_en_bandeja %}
           <small class="text-primary">{{ it.gop_fecha_en_bandeja.strftime('%d/%m/%Y') }}</small>
+        {% elif it.gop_numero %}
+          <small class="text-warning">-</small>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+
+      <!-- NUEVA COLUMNA: Días en Bandeja -->
+      <td>
+        {% if it.gop_fecha_en_bandeja %}
+          {% set dias = it.dias_en_bandeja %}
+          {% if dias <= 5 %}
+            <span class="badge bg-success">{{ dias }} días</span>
+          {% elif dias <= 12 %}
+            <span class="badge bg-warning text-dark">{{ dias }} días</span>
+          {% else %}
+            <span class="badge bg-danger">{{ dias }} días</span>
+          {% endif %}
         {% elif it.gop_numero %}
           <small class="text-warning">-</small>
         {% else %}
@@ -160,16 +184,40 @@
         {% endif %}
       </td>
 
+      <!-- NUEVA COLUMNA: Fecha Finalizado -->
+      <td>
+        {% if it.fecha_finalizado %}
+          <small class="text-success">{{ it.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
+          <br><small class="text-muted">{{ it.fecha_finalizado.strftime('%H:%M') }}</small>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+
       <td class="text-end">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
-        <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar expediente?');">
-          <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
-        </form>
+        {% if it.finalizado %}
+          <span class="badge bg-success me-2">Finalizado</span>
+          <form action="{{ url_for('reactivar_expediente', item_id=it.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-outline-warning" type="submit" title="Reactivar expediente">
+              🔄 Reactivar
+            </button>
+          </form>
+        {% else %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
+          <form action="{{ url_for('finalizar_expediente', item_id=it.id) }}" method="post" class="d-inline">
+            <button class="btn btn-sm btn-success" type="submit" onclick="return confirm('¿Marcar como finalizado?')" title="Finalizar expediente">
+              ✓ Finalizado
+            </button>
+          </form>
+          <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar expediente?');">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
+          </form>
+        {% endif %}
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="13" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="15" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>

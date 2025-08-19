@@ -130,6 +130,13 @@ def create_app():
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
         whatsapp_tramitador = _db.Column(_db.String(50), nullable=True)
 
+        # AGREGAR ESTA LÍNEA:
+        # Estado del expediente
+        finalizado = _db.Column(_db.Boolean, default=False, nullable=False)
+
+        fecha_finalizado = _db.Column(_db.DateTime, nullable=True)
+
+
         # Metadatos
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
         updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -147,6 +154,21 @@ def create_app():
                 self.tasa_visado_electromecanica_monto,
             ]
             return sum((v or 0) for v in vals)
+
+        # AGREGAR ESTA NUEVA PROPIEDAD AQUÍ:
+        @property
+        def dias_en_bandeja(self):
+            """
+            Calcula los días transcurridos desde que el expediente está en la bandeja actual.
+            Basado en gop_fecha_en_bandeja.
+            """
+            if not self.gop_fecha_en_bandeja:
+                return 0
+            
+            from datetime import date
+            hoy = date.today()
+            delta = hoy - self.gop_fecha_en_bandeja
+            return delta.days
 
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
@@ -342,6 +364,26 @@ def create_app():
         _db.session.commit()
         flash("Expediente eliminado", "info")
         return redirect(url_for("lista_expedientes"))
+    
+    @app.post("/expedientes/<int:item_id>/finalizar")
+    def finalizar_expediente(item_id: int):
+        """Marca un expediente como finalizado y registra la fecha."""
+        item = Expediente.query.get_or_404(item_id)
+        item.finalizado = True
+        item.fecha_finalizado = datetime.utcnow()  # Registrar fecha y hora actual
+        _db.session.commit()
+        flash(f"Expediente {item.nro_expediente_cpim or item.id} marcado como finalizado", "success")
+        return redirect(url_for("lista_expedientes"))
+
+    @app.post("/expedientes/<int:item_id>/reactivar")
+    def reactivar_expediente(item_id: int):
+        """Reactiva un expediente finalizado y limpia la fecha de finalización."""
+        item = Expediente.query.get_or_404(item_id)
+        item.finalizado = False
+        item.fecha_finalizado = None  # Limpiar fecha de finalización
+        _db.session.commit()
+        flash(f"Expediente {item.nro_expediente_cpim or item.id} reactivado", "info")
+        return redirect(url_for("lista_expedientes"))
 
     # === Parsers ===
     def _parse_bool(value: str) -> bool:
@@ -390,6 +432,18 @@ def create_app():
             return Decimal(s)
         except (InvalidOperation, ValueError):
             return None
+        
+    def _parse_datetime(value: str):
+        """Parse datetime string to datetime object."""
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            try:
+                return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
 
     def _parse_form(form):
         def _estado_norm(k):
@@ -421,6 +475,8 @@ def create_app():
             "gop_numero": form.get("gop_numero"),
             "whatsapp_profesional": form.get("whatsapp_profesional"),
             "whatsapp_tramitador": form.get("whatsapp_tramitador"),
+            "finalizado": _parse_bool(form.get("finalizado")),
+            "fecha_finalizado": _parse_datetime(form.get("fecha_finalizado")),
         }
 
     # === Helpers GCS ===

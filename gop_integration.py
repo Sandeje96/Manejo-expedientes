@@ -267,11 +267,17 @@ def sync_gop_data():
         current_app.logger.info("=== OBTENIENDO NÚMEROS GOP DEL CPIM ===")
         
         gop_numbers = _db.session.execute(
-            _db.text("SELECT DISTINCT gop_numero FROM expedientes WHERE gop_numero IS NOT NULL AND gop_numero != ''")
+            _db.text("""
+                SELECT DISTINCT gop_numero 
+                FROM expedientes 
+                WHERE gop_numero IS NOT NULL 
+                AND gop_numero != '' 
+                AND (finalizado = false OR finalizado IS NULL)
+            """)
         ).fetchall()
         
         gop_list = [row[0].strip() for row in gop_numbers if row[0] and row[0].strip()]
-        current_app.logger.info(f"GOP encontrados en CPIM: {len(gop_list)} -> {gop_list}")
+        current_app.logger.info(f"GOP encontrados en CPIM (no finalizados): {len(gop_list)} -> {gop_list}")
         
         if not gop_list:
             return {
