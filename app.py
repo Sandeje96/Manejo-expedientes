@@ -540,6 +540,8 @@ def create_app():
             flash(f"Error ejecutando sincronización: {e}", "danger")
         
         return redirect(url_for("lista_expedientes"))
+    
+
 
     @app.get("/gop/estado")
     def estado_gop():
@@ -625,6 +627,35 @@ def create_app():
         _db.session.commit()
         flash(f"Expediente {item.nro_expediente_cpim or item.id} reactivado", "info")
         return redirect(url_for("lista_expedientes"))
+    
+    @app.post("/expedientes/<int:item_id>/generar-word")
+    def generar_word_expediente(item_id: int):
+        """Genera y descarga un documento Word con los datos del expediente."""
+        from word_generator import generar_documento_expediente
+        from flask import send_file
+        
+        try:
+            # Obtener el expediente
+            item = Expediente.query.get_or_404(item_id)
+            
+            # Generar el documento Word
+            doc_stream = generar_documento_expediente(item)
+            
+            # Crear nombre del archivo
+            nombre_archivo = f"Expediente_CPIM_{item.nro_expediente_cpim or item.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            
+            # Retornar el archivo para descarga
+            return send_file(
+                doc_stream,
+                as_attachment=True,
+                download_name=nombre_archivo,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+            
+        except Exception as e:
+            current_app.logger.error(f"Error generando documento Word para expediente {item_id}: {e}")
+            flash(f"Error generando documento Word: {e}", "danger")
+            return redirect(url_for('detalle_expediente', item_id=item_id))
 
     # === Parsers ===
     def _parse_bool(value: str) -> bool:

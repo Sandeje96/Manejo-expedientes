@@ -10,6 +10,14 @@
     {% elif item.formato == 'Papel' %}
       <span class="badge bg-secondary fs-6">📄 Papel</span>
     {% endif %}
+    
+    <!-- Botón para generar Word -->
+    <form method="post" action="{{ url_for('generar_word_expediente', item_id=item.id) }}" class="d-inline">
+      <button type="submit" class="btn btn-success" title="Generar documento Word">
+        📄 Generar Word
+      </button>
+    </form>
+    
     <a class="btn btn-outline-primary" href="{{ url_for('editar_expediente', item_id=item.id) }}">Editar</a>
   </div>
 </div>
