@@ -5,6 +5,182 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CPIM Expedientes{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Estilos para la ventana de carga -->
+  <style>
+    /* Overlay de carga */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .loading-overlay.show {
+      display: flex;
+    }
+
+    .loading-container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      max-width: 450px;
+      width: 90%;
+      animation: scaleIn 0.4s ease-out;
+    }
+
+    /* Animación del spinner */
+    .sync-spinner {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      position: relative;
+    }
+
+    .sync-spinner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 4px solid #e3f2fd;
+      border-top: 4px solid #2196f3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .sync-spinner::after {
+      content: '🔄';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* Barra de progreso simulada */
+    .progress-container {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 3px;
+      margin: 20px 0;
+    }
+
+    .progress-bar-custom {
+      height: 8px;
+      background: linear-gradient(90deg, #2196f3, #1976d2);
+      border-radius: 8px;
+      width: 0%;
+      transition: width 0.3s ease;
+      animation: progressGlow 2s ease-in-out infinite alternate;
+    }
+
+    /* Animaciones */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scaleIn {
+      from { 
+        opacity: 0;
+        transform: scale(0.8);
+      }
+      to { 
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    @keyframes progressGlow {
+      0% { box-shadow: 0 0 5px rgba(33, 150, 243, 0.3); }
+      100% { box-shadow: 0 0 20px rgba(33, 150, 243, 0.6); }
+    }
+
+    /* Estilos para los pasos */
+    .sync-steps {
+      text-align: left;
+      margin: 20px 0;
+    }
+
+    .sync-step {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .sync-step.active {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .sync-step.completed {
+      background: #e8f5e8;
+      color: #2e7d32;
+    }
+
+    .sync-step-icon {
+      margin-right: 10px;
+      font-size: 16px;
+      width: 20px;
+    }
+
+    .sync-step.active .sync-step-icon {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Estadísticas en tiempo real */
+    .sync-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .sync-stat {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 4px solid #2196f3;
+    }
+
+    .sync-stat-number {
+      font-size: 20px;
+      font-weight: bold;
+      color: #1976d2;
+    }
+
+    .sync-stat-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+    }
+  </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
@@ -25,5 +201,216 @@
 
   {% block content %}{% endblock %}
 </div>
+
+<!-- Overlay de Carga para Sincronización GOP -->
+<div id="gopLoadingOverlay" class="loading-overlay">
+  <div class="loading-container">
+    <!-- Spinner principal -->
+    <div class="sync-spinner"></div>
+    
+    <!-- Título -->
+    <h4 class="mb-3">Sincronizando con GOP</h4>
+    <p class="text-muted mb-4">Obteniendo datos del sistema de Posadas...</p>
+    
+    <!-- Barra de progreso -->
+    <div class="progress-container">
+      <div id="gopProgressBar" class="progress-bar-custom"></div>
+    </div>
+    
+    <!-- Paso actual -->
+    <div id="gopCurrentStep" class="text-primary fw-bold mb-3">
+      Iniciando sincronización...
+    </div>
+    
+    <!-- Pasos del proceso -->
+    <div class="sync-steps">
+      <div id="gopStep1" class="sync-step">
+        <span class="sync-step-icon">⏳</span>
+        <span>Conectando al sistema GOP</span>
+      </div>
+      <div id="gopStep2" class="sync-step">
+        <span class="sync-step-icon">🔍</span>
+        <span>Buscando expedientes</span>
+      </div>
+      <div id="gopStep3" class="sync-step">
+        <span class="sync-step-icon">📊</span>
+        <span>Procesando bandejas</span>
+      </div>
+      <div id="gopStep4" class="sync-step">
+        <span class="sync-step-icon">💾</span>
+        <span>Actualizando base de datos</span>
+      </div>
+    </div>
+    
+    <!-- Estadísticas simuladas -->
+    <div class="sync-stats">
+      <div class="sync-stat">
+        <div id="gopStatFound" class="sync-stat-number">0</div>
+        <div class="sync-stat-label">Encontrados</div>
+      </div>
+      <div class="sync-stat">
+        <div id="gopStatUpdated" class="sync-stat-number">0</div>
+        <div class="sync-stat-label">Actualizados</div>
+      </div>
+    </div>
+    
+    <!-- Advertencia -->
+    <div class="alert alert-warning mt-3 mb-0" role="alert">
+      <small>
+        <strong>⚠️ No cerrar esta ventana</strong><br>
+        La sincronización puede tomar varios minutos
+      </small>
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript para el control de la ventana de carga -->
+<script>
+// Variables globales para el control de la sincronización
+let gopSyncProgress = 0;
+let gopCurrentStepIndex = 0;
+const gopSteps = ['gopStep1', 'gopStep2', 'gopStep3', 'gopStep4'];
+const gopStepTexts = [
+  'Conectando al sistema GOP...',
+  'Buscando expedientes en bandejas...',
+  'Procesando datos de bandejas...',
+  'Guardando cambios en base de datos...'
+];
+
+// Función para mostrar la ventana de carga
+function showGopLoadingOverlay() {
+  // Resetear valores
+  gopSyncProgress = 0;
+  gopCurrentStepIndex = 0;
+  
+  // Mostrar overlay
+  document.getElementById('gopLoadingOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  
+  // Resetear elementos visuales
+  document.getElementById('gopProgressBar').style.width = '0%';
+  document.getElementById('gopCurrentStep').textContent = 'Iniciando sincronización...';
+  document.getElementById('gopStatFound').textContent = '0';
+  document.getElementById('gopStatUpdated').textContent = '0';
+  
+  // Resetear pasos
+  gopSteps.forEach((stepId) => {
+    const stepElement = document.getElementById(stepId);
+    stepElement.classList.remove('active', 'completed');
+    stepElement.querySelector('.sync-step-icon').textContent = stepElement === document.getElementById('gopStep1') ? '⏳' : 
+                                                                stepElement === document.getElementById('gopStep2') ? '🔍' :
+                                                                stepElement === document.getElementById('gopStep3') ? '📊' : '💾';
+  });
+  
+  // Iniciar simulación de progreso
+  simulateGopProgress();
+}
+
+// Función para ocultar la ventana de carga
+function hideGopLoadingOverlay() {
+  document.getElementById('gopLoadingOverlay').classList.remove('show');
+  document.body.style.overflow = 'auto';
+}
+
+// Función para actualizar el progreso
+function updateGopProgress(progress, stepIndex, stats = {}) {
+  // Actualizar barra de progreso
+  document.getElementById('gopProgressBar').style.width = progress + '%';
+  
+  // Actualizar paso actual
+  if (stepIndex >= 0 && stepIndex < gopStepTexts.length) {
+    document.getElementById('gopCurrentStep').textContent = gopStepTexts[stepIndex];
+    
+    // Marcar pasos como completados o activos
+    gopSteps.forEach((stepId, index) => {
+      const stepElement = document.getElementById(stepId);
+      stepElement.classList.remove('active', 'completed');
+      
+      if (index < stepIndex) {
+        stepElement.classList.add('completed');
+        stepElement.querySelector('.sync-step-icon').textContent = '✅';
+      } else if (index === stepIndex) {
+        stepElement.classList.add('active');
+      }
+    });
+  }
+  
+  // Actualizar estadísticas
+  if (stats.found !== undefined) {
+    document.getElementById('gopStatFound').textContent = stats.found;
+  }
+  if (stats.updated !== undefined) {
+    document.getElementById('gopStatUpdated').textContent = stats.updated;
+  }
+}
+
+// Función para simular progreso (será reemplazada por progreso real)
+function simulateGopProgress() {
+  const progressInterval = setInterval(() => {
+    gopSyncProgress += Math.random() * 8 + 2; // Progreso más realista
+    
+    if (gopSyncProgress >= 25 && gopCurrentStepIndex === 0) {
+      gopCurrentStepIndex = 1;
+      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { found: Math.floor(Math.random() * 10) + 1 });
+    } else if (gopSyncProgress >= 50 && gopCurrentStepIndex === 1) {
+      gopCurrentStepIndex = 2;
+      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { found: Math.floor(Math.random() * 15) + 8 });
+    } else if (gopSyncProgress >= 75 && gopCurrentStepIndex === 2) {
+      gopCurrentStepIndex = 3;
+      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { 
+        found: Math.floor(Math.random() * 20) + 12,
+        updated: Math.floor(Math.random() * 15) + 8
+      });
+    } else if (gopSyncProgress >= 100) {
+      gopSyncProgress = 100;
+      updateGopProgress(gopSyncProgress, 3, { 
+        found: Math.floor(Math.random() * 25) + 18,
+        updated: Math.floor(Math.random() * 20) + 15
+      });
+      clearInterval(progressInterval);
+      
+      // Completar último paso
+      setTimeout(() => {
+        updateGopProgress(100, 4);
+        document.getElementById('gopCurrentStep').textContent = '¡Sincronización completada!';
+        
+        // La página se recargará automáticamente cuando termine la sincronización real
+      }, 1000);
+    } else {
+      updateGopProgress(gopSyncProgress, gopCurrentStepIndex);
+    }
+  }, 300); // Un poco más lento para ser más realista
+}
+
+// Interceptar formularios de sincronización GOP
+document.addEventListener('DOMContentLoaded', function() {
+  // Buscar todos los formularios que contienen sincronización GOP
+  const syncForms = document.querySelectorAll('form[action*="sincronizar"]');
+  
+  syncForms.forEach(form => {
+    form.addEventListener('submit', function(e) {
+      // Mostrar la ventana de carga
+      showGopLoadingOverlay();
+      
+      // El formulario continuará su envío normal
+      // La ventana se ocultará cuando la página se recargue con los resultados
+    });
+  });
+  
+  // También interceptar botones de sincronización que no estén en formularios
+  const syncButtons = document.querySelectorAll('button[onclick*="sincronizar"], a[href*="sincronizar"]');
+  
+  syncButtons.forEach(button => {
+    button.addEventListener('click', function(e) {
+      // Solo mostrar si es un botón de sincronización
+      if (this.textContent.toLowerCase().includes('sincronizar') || 
+          this.textContent.includes('🔄')) {
+        showGopLoadingOverlay();
+      }
+    });
+  });
+});
+</script>
+
 </body>
 </html>
