@@ -6,78 +6,305 @@
   <a class="btn btn-outline-primary" href="{{ url_for('editar_expediente', item_id=item.id) }}">Editar</a>
 </div>
 
-<table class="table table-bordered">
-  <tbody>
-    <tr><th style="width:260px">Fecha</th><td>{{ item.fecha or '-' }}</td></tr>
-    <tr><th>Profesión</th><td>{{ item.profesion or '-' }}</td></tr>
-    <tr><th>Formato</th><td>{{ item.formato or '-' }}</td></tr>
-    <tr><th>N° de copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
-    <tr><th>Tipo de trabajo</th><td>{{ item.tipo_trabajo or '-' }}</td></tr>
-    <tr><th>N° expediente CPIM</th><td>{{ item.nro_expediente_cpim or '-' }}</td></tr>
-    <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
-    <tr><th>Comitente</th><td>{{ item.nombre_comitente or '-' }}</td></tr>
-    <tr><th>Ubicación</th><td>{{ item.ubicacion or '-' }}</td></tr>
-    <tr><th>Partida Inmobiliaria</th><td>{{ item.partida_inmobiliaria or '-' }}</td></tr>
-    <tr><th>Número Expediente Municipal</th><td>{{ item.nro_expediente_municipal or '-' }}</td></tr>
-    <tr>
-      <th>Visados</th>
-      <td>
-        Gas: {{ 'Sí' if item.visado_gas else 'No' }} |
-        Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} |
-        Eléctrica: {{ 'Sí' if item.visado_electrica else 'No' }} |
-        Electromecánica: {{ 'Sí' if item.visado_electromecanica else 'No' }}
-      </td>
-    </tr>
-    <tr><th>Estado pago sellado</th><td>{{ (item.estado_pago_sellado or 'pendiente')|capitalize }}</td></tr>
-    <tr><th>Estado pago visado</th><td>{{ (item.estado_pago_visado or 'pendiente')|capitalize }}</td></tr>
-    <tr><th>Tasa de sellado</th><td>{{ item.tasa_sellado_monto|ars }}</td></tr>
-    <tr><th>Visado eléctrica</th><td>{{ item.tasa_visado_electrica_monto|ars }}</td></tr>
-    <tr><th>Visado salubridad</th><td>{{ item.tasa_visado_salubridad_monto|ars }}</td></tr>
-    <tr><th>Visado gas</th><td>{{ item.tasa_visado_gas_monto|ars }}</td></tr>
-    <tr><th>Visado electromecánica</th><td>{{ item.tasa_visado_electromecanica_monto|ars }}</td></tr>
-    <tr class="table-secondary"><th>Total visados</th><td>{{ item.total_visados|ars }}</td></tr>
-    <tr><th>Fecha de salida</th><td>{{ item.fecha_salida or '-' }}</td></tr>
-    <tr><th>Persona que retira</th><td>{{ item.persona_retira or '-' }}</td></tr>
-    <tr><th>N° de caja</th><td>{{ item.nro_caja or '-' }}</td></tr>
-    <tr><th>Ruta carpeta</th><td>{{ item.ruta_carpeta or '-' }}</td></tr>
+<!-- Historial de Bandejas (Versión Segura) -->
+{% set totales = item.get_dias_totales_por_bandeja() %}
+{% set historial = item.get_historial_bandejas() %}
 
-    {% if item.formato == 'Digital' %}
-    <tr><th>Número de GOP</th><td>{{ item.gop_numero or '-' }}</td></tr>
-    <tr>
-      <th>Archivos PDF</th>
-      <td>
-        {% if item.archivos and item.archivos|length %}
-          <ul class="mb-0">
-            {% for a in item.archivos %}
-              <li>
-                {% set name = a.filename or 'archivo.pdf' %}
-                {% if a.public_url %}
-                  <a href="{{ a.public_url }}" target="_blank" rel="noopener">{{ name }}</a>
-                {% else %}
-                  {# Bucket con UBLA: usamos URL pública basada en IAM #}
-                  {% set parts = a.gcs_path.split('gs://')[-1].split('/', 1) %}
-                  {% set bucket = parts[0] %}
-                  {% set key = parts[1] if parts|length > 1 else '' %}
-                  <a href="https://storage.googleapis.com/{{ bucket }}/{{ key }}" target="_blank" rel="noopener">{{ name }}</a>
-                  <small class="text-muted">(puede requerir permisos públicos del bucket)</small>
-                {% endif %}
-                {% if a.size_bytes %}
-                  <small class="text-muted">— {{ (a.size_bytes / 1024)|round(1) }} KB</small>
-                {% endif %}
-              </li>
+<div class="card mb-4 border-primary">
+  <div class="card-header bg-primary bg-gradient text-white">
+    <h5 class="card-title mb-0">
+      <i class="bi bi-clock-history"></i> 
+      Historial del Expediente
+    </h5>
+  </div>
+  <div class="card-body">
+    <!-- Verificar si hay datos de historial -->
+    {% if totales and (totales.cpim > 0 or totales.imlauer > 0 or totales.onetto > 0 or totales.profesional > 0) %}
+      <!-- Resumen de días totales por bandeja -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <h6 class="text-muted mb-3">Días acumulados por bandeja:</h6>
+          <div class="row">
+            <!-- CPIM -->
+            <div class="col-md-3 col-6 mb-3">
+              <div class="card text-center border-info">
+                <div class="card-body py-2">
+                  <h4 class="text-info mb-1">{{ totales.cpim }}</h4>
+                  <small class="text-muted">días en CPIM</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- IMLAUER -->
+            <div class="col-md-3 col-6 mb-3">
+              <div class="card text-center border-warning">
+                <div class="card-body py-2">
+                  <h4 class="text-warning mb-1">{{ totales.imlauer }}</h4>
+                  <small class="text-muted">días en IMLAUER</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- ONETTO -->
+            <div class="col-md-3 col-6 mb-3">
+              <div class="card text-center border-secondary">
+                <div class="card-body py-2">
+                  <h4 class="text-secondary mb-1">{{ totales.onetto }}</h4>
+                  <small class="text-muted">días en ONETTO</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- PROFESIONAL -->
+            <div class="col-md-3 col-6 mb-3">
+              <div class="card text-center border-success">
+                <div class="card-body py-2">
+                  <h4 class="text-success mb-1">{{ totales.profesional }}</h4>
+                  <small class="text-muted">días en PROFESIONAL</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Total general -->
+          <div class="text-center mt-2">
+            <span class="badge bg-dark fs-6">
+              Total en sistema: {{ item.get_total_dias_en_sistema() }} días
+            </span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Timeline del historial -->
+      {% if historial and historial|length > 0 %}
+      <div class="row">
+        <div class="col-12">
+          <h6 class="text-muted mb-3">Línea de tiempo:</h6>
+          <div class="timeline">
+            {% for registro in historial %}
+            <div class="timeline-item mb-3">
+              <div class="row align-items-center">
+                <!-- Icono de bandeja -->
+                <div class="col-auto">
+                  {% if registro.bandeja_tipo == 'cpim' %}
+                    <div class="timeline-marker bg-info">
+                      <i class="bi bi-building text-white"></i>
+                    </div>
+                  {% elif registro.bandeja_tipo == 'imlauer' %}
+                    <div class="timeline-marker bg-warning">
+                      <i class="bi bi-person-check text-white"></i>
+                    </div>
+                  {% elif registro.bandeja_tipo == 'onetto' %}
+                    <div class="timeline-marker bg-secondary">
+                      <i class="bi bi-clipboard-check text-white"></i>
+                    </div>
+                  {% else %}
+                    <div class="timeline-marker bg-success">
+                      <i class="bi bi-person-workspace text-white"></i>
+                    </div>
+                  {% endif %}
+                </div>
+                
+                <!-- Contenido del registro -->
+                <div class="col">
+                  <div class="card border-0 bg-light">
+                    <div class="card-body py-2 px-3">
+                      <div class="row align-items-center">
+                        <div class="col-md-4">
+                          <strong class="text-uppercase">{{ registro.bandeja_tipo }}</strong>
+                          <br>
+                          <small class="text-muted">{{ registro.bandeja_nombre or '-' }}</small>
+                        </div>
+                        
+                        <div class="col-md-3">
+                          <small class="text-muted">Usuario:</small>
+                          <br>
+                          <span class="fw-bold">{{ registro.usuario_asignado or '-' }}</span>
+                        </div>
+                        
+                        <div class="col-md-3">
+                          <small class="text-muted">Período:</small>
+                          <br>
+                          <span class="fw-bold">
+                            {{ registro.fecha_inicio.strftime('%d/%m/%Y') }}
+                            {% if registro.fecha_fin %}
+                              - {{ registro.fecha_fin.strftime('%d/%m/%Y') }}
+                            {% else %}
+                              - <span class="text-success">Actual</span>
+                            {% endif %}
+                          </span>
+                        </div>
+                        
+                        <div class="col-md-2 text-end">
+                          {% if registro.esta_activo %}
+                            <span class="badge bg-success">
+                              {{ registro.dias_calculados }} días
+                            </span>
+                            <br>
+                            <small class="text-success">Activo</small>
+                          {% else %}
+                            <span class="badge bg-secondary">
+                              {{ registro.dias_en_bandeja or registro.dias_calculados }} días
+                            </span>
+                            <br>
+                            <small class="text-muted">Finalizado</small>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
             {% endfor %}
-          </ul>
-        {% else %}
-          <span class="text-muted">Sin archivos adjuntos</span>
-        {% endif %}
-      </td>
-    </tr>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    {% else %}
+      <!-- Sin historial disponible -->
+      <div class="text-center text-muted py-4">
+        <i class="bi bi-info-circle fs-1 mb-3"></i>
+        <h6>Historial en construcción</h6>
+        <p class="mb-2">El historial de bandejas se construye automáticamente con las sincronizaciones GOP.</p>
+        <small class="text-muted">
+          Una vez que sincronices con GOP, verás aquí el seguimiento detallado del expediente.
+        </small>
+      </div>
     {% endif %}
+  </div>
+</div>
 
-    <tr><th>WhatsApp Profesional</th><td>{{ item.whatsapp_profesional or '-' }}</td></tr>
-    <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
-    <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
-    <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>
-  </tbody>
-</table>
+<!-- CSS para el timeline -->
+<style>
+.timeline {
+  position: relative;
+}
+
+.timeline-item {
+  position: relative;
+}
+
+.timeline-marker {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.timeline-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 40px;
+  width: 2px;
+  height: calc(100% - 20px);
+  background: linear-gradient(to bottom, #dee2e6, transparent);
+  z-index: -1;
+}
+
+.timeline-item:last-child::after {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .timeline-marker {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  
+  .timeline-item:not(:last-child)::after {
+    left: 14px;
+    top: 30px;
+  }
+}
+</style>
+
+<!-- Detalles del Expediente -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">Detalles del Expediente</h5>
+  </div>
+  <div class="card-body">
+    <table class="table table-bordered">
+      <tbody>
+        <tr><th style="width:260px">Fecha</th><td>{{ item.fecha or '-' }}</td></tr>
+        <tr><th>Profesión</th><td>{{ item.profesion or '-' }}</td></tr>
+        <tr><th>Formato</th><td>{{ item.formato or '-' }}</td></tr>
+        <tr><th>N° de copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
+        <tr><th>Tipo de trabajo</th><td>{{ item.tipo_trabajo or '-' }}</td></tr>
+        <tr><th>N° expediente CPIM</th><td>{{ item.nro_expediente_cpim or '-' }}</td></tr>
+        <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
+        <tr><th>Comitente</th><td>{{ item.nombre_comitente or '-' }}</td></tr>
+        <tr><th>Ubicación</th><td>{{ item.ubicacion or '-' }}</td></tr>
+        <tr><th>Partida Inmobiliaria</th><td>{{ item.partida_inmobiliaria or '-' }}</td></tr>
+        <tr><th>Número Expediente Municipal</th><td>{{ item.nro_expediente_municipal or '-' }}</td></tr>
+        <tr>
+          <th>Visados</th>
+          <td>
+            Gas: {{ 'Sí' if item.visado_gas else 'No' }} |
+            Salubridad: {{ 'Sí' if item.visado_salubridad else 'No' }} |
+            Eléctrica: {{ 'Sí' if item.visado_electrica else 'No' }} |
+            Electromecánica: {{ 'Sí' if item.visado_electromecanica else 'No' }}
+          </td>
+        </tr>
+        <tr><th>Estado pago sellado</th><td>{{ (item.estado_pago_sellado or 'pendiente')|capitalize }}</td></tr>
+        <tr><th>Estado pago visado</th><td>{{ (item.estado_pago_visado or 'pendiente')|capitalize }}</td></tr>
+        <tr><th>Tasa de sellado</th><td>{{ item.tasa_sellado_monto|ars }}</td></tr>
+        <tr><th>Visado eléctrica</th><td>{{ item.tasa_visado_electrica_monto|ars }}</td></tr>
+        <tr><th>Visado salubridad</th><td>{{ item.tasa_visado_salubridad_monto|ars }}</td></tr>
+        <tr><th>Visado gas</th><td>{{ item.tasa_visado_gas_monto|ars }}</td></tr>
+        <tr><th>Visado electromecánica</th><td>{{ item.tasa_visado_electromecanica_monto|ars }}</td></tr>
+        <tr class="table-secondary"><th>Total visados</th><td>{{ item.total_visados|ars }}</td></tr>
+        <tr><th>Fecha de salida</th><td>{{ item.fecha_salida or '-' }}</td></tr>
+        <tr><th>Persona que retira</th><td>{{ item.persona_retira or '-' }}</td></tr>
+        <tr><th>N° de caja</th><td>{{ item.nro_caja or '-' }}</td></tr>
+        <tr><th>Ruta carpeta</th><td>{{ item.ruta_carpeta or '-' }}</td></tr>
+
+        {% if item.formato == 'Digital' %}
+        <tr><th>Número de GOP</th><td>{{ item.gop_numero or '-' }}</td></tr>
+        <tr>
+          <th>Archivos PDF</th>
+          <td>
+            {% if item.archivos and item.archivos|length %}
+              <ul class="mb-0">
+                {% for a in item.archivos %}
+                  <li>
+                    {% set name = a.filename or 'archivo.pdf' %}
+                    {% if a.public_url %}
+                      <a href="{{ a.public_url }}" target="_blank" rel="noopener">{{ name }}</a>
+                    {% else %}
+                      {# Bucket con UBLA: usamos URL pública basada en IAM #}
+                      {% set parts = a.gcs_path.split('gs://')[-1].split('/', 1) %}
+                      {% set bucket = parts[0] %}
+                      {% set key = parts[1] if parts|length > 1 else '' %}
+                      <a href="https://storage.googleapis.com/{{ bucket }}/{{ key }}" target="_blank" rel="noopener">{{ name }}</a>
+                      <small class="text-muted">(puede requerir permisos públicos del bucket)</small>
+                    {% endif %}
+                    {% if a.size_bytes %}
+                      <small class="text-muted">— {{ (a.size_bytes / 1024)|round(1) }} KB</small>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="text-muted">Sin archivos adjuntos</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr><th>WhatsApp Profesional</th><td>{{ item.whatsapp_profesional or '-' }}</td></tr>
+        <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
+        <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
+        <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

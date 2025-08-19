@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from flask import current_app
 from pathlib import Path
 
@@ -118,6 +118,7 @@ def sync_gop_data():
     """
     Ejecuta el scraper GOP y actualiza los expedientes con información distribuida por bandejas.
     Incluye lógica de fuente: "Todos los Trámites" -> siempre Bandeja PROFESIONAL.
+    AHORA CON ACTUALIZACIÓN DE HISTORIAL AUTOMÁTICA.
     """
     try:
         from app import _db
@@ -194,7 +195,7 @@ def sync_gop_data():
             gop_agrupados[gop_numero].append(datos)
         
         current_app.logger.info(f"DIAGNÓSTICO: GOP únicos agrupados: {len(gop_agrupados)}")
-        
+
         # === PASO 5: PROCESAR CADA GOP ===
         stats = {
             'total_gop_encontrados': len(gop_agrupados),
@@ -229,6 +230,9 @@ def sync_gop_data():
                 # Limpiar bandejas primero
                 current_app.logger.info(f"DIAGNÓSTICO: Limpiando bandejas para expediente {expediente_id}")
                 _limpiar_campos_bandeja(expediente_id, _db.session)
+                
+                # NUEVO: Recopilar datos para actualizar historial
+                datos_bandejas_historial = {}
                 
                 # Procesar cada bandeja encontrada para este GOP
                 for i, datos in enumerate(lista_datos):
@@ -282,6 +286,13 @@ def sync_gop_data():
                     
                     stats[f'bandejas_{bandeja_tipo}'] += 1
                     current_app.logger.info(f"  ✓ Actualizado bandeja {bandeja_tipo} desde {datos.get('fuente', '')}")
+                    
+                    # NUEVO: Guardar datos para historial
+                    datos_bandejas_historial[bandeja_tipo] = {
+                        'nombre': str(datos.get('bandeja_actual', ''))[:200],
+                        'usuario': usuario_para_guardar,
+                        'fecha': fecha_en_bandeja or fecha_entrada or date.today()
+                    }
                 
                 # Actualizar campos GOP originales con el primer resultado
                 primer_dato = lista_datos[0]
@@ -316,6 +327,15 @@ def sync_gop_data():
                     }
                 )
                 
+                # NUEVO: Actualizar historial de bandejas
+                try:
+                    current_app.logger.info(f"DIAGNÓSTICO: Actualizando historial para expediente {expediente_id}")
+                    _actualizar_historial_tras_sincronizacion(expediente_id, datos_bandejas_historial)
+                    current_app.logger.info(f"DIAGNÓSTICO: ✓ Historial actualizado para expediente {expediente_id}")
+                except Exception as hist_error:
+                    current_app.logger.warning(f"DIAGNÓSTICO: Error actualizando historial para {expediente_id}: {hist_error}")
+                    # No fallar la sincronización por un error en el historial
+                
                 stats['expedientes_actualizados'] += 1
                 current_app.logger.info(f"DIAGNÓSTICO: ✓ Expediente {expediente_id} actualizado completamente")
                 
@@ -349,7 +369,142 @@ def sync_gop_data():
             'bandejas_profesional': 0,
             'errores': [str(e)]
         }
+
+def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
+    """
+    Actualiza el historial de bandejas después de una sincronización GOP.
+    Detecta cambios y registra movimientos entre bandejas.
+    Versión segura que maneja el caso donde la tabla no existe.
     
+    Args:
+        expediente_id: ID del expediente
+        datos_nuevos: Dict con las bandejas actualizadas {
+            'cpim': {'nombre': '...', 'usuario': '...', 'fecha': date},
+            'imlauer': {...}, etc.
+        }
+    """
+    from app import _db
+    
+    try:
+        # Verificar si la tabla existe
+        result = _db.session.execute(
+            _db.text("SELECT 1 FROM historial_bandejas LIMIT 1")
+        )
+        result.close()
+        
+        # Obtener expediente
+        expediente_result = _db.session.execute(
+            _db.text("SELECT id FROM expedientes WHERE id = :expediente_id"),
+            {"expediente_id": expediente_id}
+        ).fetchone()
+        
+        if not expediente_result:
+            return
+        
+        # Procesar cada bandeja que tiene datos nuevos
+        for bandeja_tipo, datos in datos_nuevos.items():
+            if not datos or not datos.get('nombre'):
+                continue
+            
+            nombre_bandeja = datos.get('nombre', '')
+            usuario = datos.get('usuario', '')
+            fecha_bandeja = datos.get('fecha') or date.today()
+            
+            # Verificar si ya existe un registro activo para esta bandeja
+            registro_activo = _db.session.execute(
+                _db.text("""
+                    SELECT id, bandeja_nombre, usuario_asignado, fecha_inicio 
+                    FROM historial_bandejas 
+                    WHERE expediente_id = :expediente_id 
+                    AND bandeja_tipo = :bandeja_tipo 
+                    AND fecha_fin IS NULL
+                """),
+                {
+                    "expediente_id": expediente_id,
+                    "bandeja_tipo": bandeja_tipo
+                }
+            ).fetchone()
+            
+            if registro_activo:
+                # Ya existe un registro activo para esta bandeja
+                # Verificar si cambió el nombre de la bandeja o usuario
+                if (registro_activo[1] != nombre_bandeja or 
+                    registro_activo[2] != usuario):
+                    
+                    # Cerrar el registro anterior
+                    dias_en_bandeja = (fecha_bandeja - registro_activo[3]).days
+                    _db.session.execute(
+                        _db.text("""
+                            UPDATE historial_bandejas 
+                            SET fecha_fin = :fecha_fin, 
+                                dias_en_bandeja = :dias,
+                                updated_at = :now
+                            WHERE id = :registro_id
+                        """),
+                        {
+                            "fecha_fin": fecha_bandeja,
+                            "dias": max(0, dias_en_bandeja),
+                            "now": datetime.utcnow(),
+                            "registro_id": registro_activo[0]
+                        }
+                    )
+                    
+                    # Crear nuevo registro
+                    _crear_nuevo_registro_historial(
+                        expediente_id, bandeja_tipo, nombre_bandeja, 
+                        usuario, fecha_bandeja
+                    )
+                    
+                    current_app.logger.info(
+                        f"Historial: Expediente {expediente_id} cambió en bandeja {bandeja_tipo}"
+                    )
+            else:
+                # No existe registro activo, crear uno nuevo
+                _crear_nuevo_registro_historial(
+                    expediente_id, bandeja_tipo, nombre_bandeja, 
+                    usuario, fecha_bandeja
+                )
+                
+                current_app.logger.info(
+                    f"Historial: Expediente {expediente_id} entró a bandeja {bandeja_tipo}"
+                )
+    
+    except Exception as e:
+        # Si la tabla no existe o hay otro error, hacer rollback y continuar
+        _db.session.rollback()
+        current_app.logger.warning(f"No se pudo actualizar historial para expediente {expediente_id}: {e}")
+        # No propagar el error para que la sincronización continúe
+
+def _crear_nuevo_registro_historial(expediente_id, bandeja_tipo, nombre_bandeja, usuario, fecha_inicio):
+    """
+    Crea un nuevo registro en el historial de bandejas.
+    Versión segura.
+    """
+    from app import _db
+    
+    try:
+        _db.session.execute(
+            _db.text("""
+                INSERT INTO historial_bandejas 
+                (expediente_id, bandeja_tipo, bandeja_nombre, usuario_asignado, 
+                 fecha_inicio, fecha_fin, dias_en_bandeja, created_at, updated_at)
+                VALUES 
+                (:expediente_id, :bandeja_tipo, :bandeja_nombre, :usuario_asignado,
+                 :fecha_inicio, NULL, NULL, :now, :now)
+            """),
+            {
+                "expediente_id": expediente_id,
+                "bandeja_tipo": bandeja_tipo,
+                "bandeja_nombre": nombre_bandeja[:200],  # Truncar si es muy largo
+                "usuario_asignado": usuario[:200],
+                "fecha_inicio": fecha_inicio,
+                "now": datetime.utcnow()
+            }
+        )
+    except Exception as e:
+        _db.session.rollback()
+        current_app.logger.warning(f"Error creando registro historial: {e}")
+
 def _buscar_gops_en_pagina_simple(page, gops_buscados, fuente, gop_especifico):
     """
     Versión simplificada para buscar GOP después de aplicar filtro.
@@ -1214,76 +1369,3 @@ def _run_scraper_direct():
     
     current_app.logger.info(f"Scraper completado: {len(df)} filas -> {out_csv}")
     return out_csv
-
-def _buscar_gops_en_pagina(page, gops_buscados, fuente):
-    """
-    Versión original para compatibilidad con funciones heredadas.
-    Busca números GOP específicos en la página actual.
-    Retorna diccionario con los GOP encontrados y sus datos.
-    """
-    encontrados = {}
-    
-    try:
-        # Buscar tabla
-        rows = page.locator("table tbody tr, .table tbody tr, .grid-view tbody tr")
-        count = rows.count()
-        
-        current_app.logger.info(f"[{fuente}] Analizando {count} filas...")
-        
-        for i in range(min(count, 200)):  # Limitar a 200 filas
-            try:
-                row = rows.nth(i)
-                cells = row.locator("td")
-                cell_count = cells.count()
-                
-                if cell_count >= 6:
-                    # Obtener número de sistema (primera columna)
-                    nro_sistema = cells.nth(0).inner_text().strip()
-                    
-                    # Verificar si este GOP está en nuestra lista de búsqueda
-                    if nro_sistema in gops_buscados:
-                        current_app.logger.info(f"[{fuente}] ¡Encontrado GOP {nro_sistema}!")
-                        
-                        # Extraer datos según la fuente (índices diferentes)
-                        if fuente == "Mis Bandejas":
-                            # Índices para "Mis Bandejas"
-                            fecha_en_bandeja = cells.nth(6).inner_text().strip() if cell_count > 6 else ""  # Índice 6
-                            usuario_asignado = cells.nth(7).inner_text().strip() if cell_count > 7 else ""
-                        else:
-                            # Índices para "Todos los Trámites"
-                            fecha_en_bandeja = cells.nth(7).inner_text().strip() if cell_count > 7 else ""  # Índice 7
-                            usuario_asignado = cells.nth(8).inner_text().strip() if cell_count > 8 else ""
-                        
-                        # Extraer todos los datos
-                        encontrados[nro_sistema] = {
-                            "nro_sistema": nro_sistema,
-                            "expediente": cells.nth(1).inner_text().strip() if cell_count > 1 else "",
-                            "estado": cells.nth(2).inner_text().strip() if cell_count > 2 else "",
-                            "profesional": cells.nth(3).inner_text().strip() if cell_count > 3 else "",
-                            "nomenclatura": cells.nth(4).inner_text().strip() if cell_count > 4 else "",
-                            "bandeja_actual": cells.nth(5).inner_text().strip() if cell_count > 5 else "",
-                            "fecha_entrada": cells.nth(6).inner_text().strip() if cell_count > 6 else "",  # Original
-                            "fecha_en_bandeja": fecha_en_bandeja,  # NUEVO CAMPO según fuente
-                            "usuario_asignado": usuario_asignado,  # Ajustado según fuente
-                            "fuente": fuente
-                        }
-                        
-                        # Log específico según la fuente
-                        if fuente == "Mis Bandejas":
-                            current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario={encontrados[nro_sistema]['usuario_asignado']} (desde Mis Bandejas)")
-                            current_app.logger.info(f"  Fecha en bandeja (índice 6): {fecha_en_bandeja}")
-                        else:
-                            current_app.logger.info(f"  Datos: Bandeja={encontrados[nro_sistema]['bandeja_actual']}, Usuario=Profesional (forzado desde Todos los Trámites)")
-                            current_app.logger.info(f"  Fecha en bandeja (índice 7): {fecha_en_bandeja}")
-                        
-                        current_app.logger.info(f"  Estado: {encontrados[nro_sistema]['estado']}, Profesional: {encontrados[nro_sistema]['profesional']}")
-                        
-            except Exception as e:
-                current_app.logger.warning(f"[{fuente}] Error procesando fila {i}: {e}")
-                continue
-                
-    except Exception as e:
-        current_app.logger.error(f"[{fuente}] Error general: {e}")
-        page.screenshot(path=f"error_{fuente.lower().replace(' ', '_')}.png")
-    
-    return encontrados

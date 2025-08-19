@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import or_
@@ -155,12 +155,9 @@ def create_app():
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
         whatsapp_tramitador = _db.Column(_db.String(50), nullable=True)
 
-        # AGREGAR ESTA LÍNEA:
         # Estado del expediente
         finalizado = _db.Column(_db.Boolean, default=False, nullable=False)
-
         fecha_finalizado = _db.Column(_db.DateTime, nullable=True)
-
 
         # Metadatos
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
@@ -180,7 +177,6 @@ def create_app():
             ]
             return sum((v or 0) for v in vals)
 
-        # AGREGAR ESTA NUEVA PROPIEDAD AQUÍ:
         @property
         def dias_en_bandeja(self):
             """
@@ -190,7 +186,6 @@ def create_app():
             if not self.gop_fecha_en_bandeja:
                 return 0
             
-            from datetime import date
             hoy = date.today()
             delta = hoy - self.gop_fecha_en_bandeja
             return delta.days
@@ -205,7 +200,6 @@ def create_app():
             
             # Usar la función de limpieza que definimos arriba
             # Necesitamos acceder a la función desde el contexto de la app
-            from flask import current_app
             return current_app._limpiar_bandeja_gop(self.gop_bandeja_actual)
         
         @property
@@ -213,7 +207,6 @@ def create_app():
             """Calcula días en bandeja CPIM."""
             if not self.bandeja_cpim_fecha:
                 return 0
-            from datetime import date
             return (date.today() - self.bandeja_cpim_fecha).days
 
         @property
@@ -221,7 +214,6 @@ def create_app():
             """Calcula días en bandeja IMLAUER."""
             if not self.bandeja_imlauer_fecha:
                 return 0
-            from datetime import date
             return (date.today() - self.bandeja_imlauer_fecha).days
 
         @property
@@ -229,7 +221,6 @@ def create_app():
             """Calcula días en bandeja ONETTO."""
             if not self.bandeja_onetto_fecha:
                 return 0
-            from datetime import date
             return (date.today() - self.bandeja_onetto_fecha).days
 
         @property
@@ -237,8 +228,132 @@ def create_app():
             """Calcula días en bandeja PROFESIONAL."""
             if not self.bandeja_profesional_fecha:
                 return 0
-            from datetime import date
             return (date.today() - self.bandeja_profesional_fecha).days
+        
+        def get_historial_bandejas(self):
+            """
+            Retorna el historial completo de bandejas ordenado por fecha.
+            Versión segura que maneja el caso donde la tabla no existe.
+            """
+            try:
+                # Verificar si la tabla existe usando una consulta directa
+                from sqlalchemy import text
+                result = _db.session.execute(text("SELECT 1 FROM historial_bandejas LIMIT 1"))
+                result.close()  # Cerrar el resultado para evitar problemas de transacción
+                
+                # Si llegamos aquí, la tabla existe
+                return HistorialBandeja.query.filter_by(expediente_id=self.id).order_by(
+                    HistorialBandeja.fecha_inicio.desc(),
+                    HistorialBandeja.created_at.desc()
+                ).all()
+            except Exception as e:
+                # Si la tabla no existe o hay otro error, hacer rollback y retornar lista vacía
+                _db.session.rollback()
+                if current_app:
+                    current_app.logger.warning(f"Tabla historial_bandejas no disponible: {e}")
+                return []
+        
+        def get_dias_totales_por_bandeja(self):
+            """
+            Retorna un diccionario con el total de días acumulados por cada tipo de bandeja.
+            Versión segura que maneja el caso donde la tabla no existe.
+            
+            Returns:
+                dict: {'cpim': 15, 'imlauer': 8, 'onetto': 0, 'profesional': 12}
+            """
+            try:
+                historial = self.get_historial_bandejas()
+                totales = {'cpim': 0, 'imlauer': 0, 'onetto': 0, 'profesional': 0}
+                
+                for registro in historial:
+                    if registro.dias_en_bandeja:
+                        totales[registro.bandeja_tipo] += registro.dias_en_bandeja
+                    elif registro.esta_activo:
+                        # Si está activo, calcular días hasta hoy
+                        totales[registro.bandeja_tipo] += registro.dias_calculados
+                
+                return totales
+            except Exception as e:
+                if current_app:
+                    current_app.logger.warning(f"Error calculando días por bandeja: {e}")
+                return {'cpim': 0, 'imlauer': 0, 'onetto': 0, 'profesional': 0}
+        
+        def get_total_dias_en_sistema(self):
+            """
+            Retorna el total de días que el expediente ha estado en el sistema.
+            Versión segura.
+            """
+            try:
+                totales = self.get_dias_totales_por_bandeja()
+                return sum(totales.values())
+            except Exception:
+                return 0
+        
+        def get_bandeja_actual_historial(self):
+            """
+            Retorna el registro activo del historial (donde fecha_fin es NULL).
+            Versión segura.
+            """
+            try:
+                # Verificar si la tabla existe
+                from sqlalchemy import text
+                result = _db.session.execute(text("SELECT 1 FROM historial_bandejas LIMIT 1"))
+                result.close()
+                
+                return HistorialBandeja.query.filter_by(
+                    expediente_id=self.id,
+                    fecha_fin=None
+                ).first()
+            except Exception:
+                _db.session.rollback()
+                return None
+        
+        def actualizar_historial_bandeja(self, bandeja_tipo, bandeja_nombre, usuario_asignado, fecha_actual=None):
+            """
+            Actualiza el historial cuando cambia de bandeja.
+            Versión segura que maneja el caso donde la tabla no existe.
+            
+            Args:
+                bandeja_tipo: 'cpim', 'imlauer', 'onetto', 'profesional'
+                bandeja_nombre: Nombre descriptivo de la bandeja
+                usuario_asignado: Usuario asignado
+                fecha_actual: Fecha del cambio (por defecto hoy)
+            """
+            try:
+                if fecha_actual is None:
+                    fecha_actual = date.today()
+                
+                # Verificar si la tabla existe
+                from sqlalchemy import text
+                result = _db.session.execute(text("SELECT 1 FROM historial_bandejas LIMIT 1"))
+                result.close()
+                
+                # Cerrar el registro activo anterior si existe
+                registro_activo = self.get_bandeja_actual_historial()
+                if registro_activo:
+                    registro_activo.fecha_fin = fecha_actual
+                    registro_activo.dias_en_bandeja = registro_activo.dias_calculados
+                    _db.session.add(registro_activo)
+                
+                # Crear nuevo registro para la bandeja actual
+                nuevo_registro = HistorialBandeja(
+                    expediente_id=self.id,
+                    bandeja_tipo=bandeja_tipo,
+                    bandeja_nombre=bandeja_nombre,
+                    usuario_asignado=usuario_asignado,
+                    fecha_inicio=fecha_actual,
+                    fecha_fin=None,  # Activo
+                    dias_en_bandeja=None  # Se calculará cuando se cierre
+                )
+                
+                _db.session.add(nuevo_registro)
+                return nuevo_registro
+                
+            except Exception as e:
+                _db.session.rollback()
+                if current_app:
+                    current_app.logger.warning(f"No se pudo actualizar historial de bandejas: {e}")
+                return None
 
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
@@ -253,6 +368,52 @@ def create_app():
         mime_type = _db.Column(_db.String(100), nullable=True)
         size_bytes = _db.Column(_db.Integer, nullable=True)
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+
+    class HistorialBandeja(_db.Model):
+        """Modelo para tracking del historial de días por bandeja de cada expediente."""
+        __tablename__ = "historial_bandejas"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id", ondelete="CASCADE"), nullable=False)
+        
+        # Tipo de bandeja: 'cpim', 'imlauer', 'onetto', 'profesional'
+        bandeja_tipo = _db.Column(_db.String(50), nullable=False)
+        
+        # Datos específicos de la bandeja
+        bandeja_nombre = _db.Column(_db.String(200), nullable=True)  # Nombre descriptivo de la bandeja
+        usuario_asignado = _db.Column(_db.String(200), nullable=True)  # Usuario asignado en ese período
+        
+        # Fechas del período en la bandeja
+        fecha_inicio = _db.Column(_db.Date, nullable=False)  # Cuándo entró a esta bandeja
+        fecha_fin = _db.Column(_db.Date, nullable=True)  # Cuándo salió (NULL si sigue ahí)
+        
+        # Días calculados
+        dias_en_bandeja = _db.Column(_db.Integer, nullable=True)  # Días que estuvo en esta bandeja
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        # Relación con expediente
+        expediente = _db.relationship("Expediente", backref=_db.backref("historial_bandejas", cascade="all, delete-orphan"))
+        
+        @property
+        def dias_calculados(self):
+            """Calcula los días en la bandeja basado en fechas."""
+            if not self.fecha_inicio:
+                return 0
+            
+            fecha_final = self.fecha_fin or date.today()
+            delta = fecha_final - self.fecha_inicio
+            return max(0, delta.days)
+        
+        @property
+        def esta_activo(self):
+            """Determina si este registro representa el período actual (fecha_fin es NULL)."""
+            return self.fecha_fin is None
+        
+        def __repr__(self):
+            return f"<HistorialBandeja {self.expediente_id} - {self.bandeja_tipo} ({self.fecha_inicio} a {self.fecha_fin or 'actual'})>"
 
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
@@ -530,7 +691,6 @@ def create_app():
             v = (form.get(k) or "").strip().lower()
             return v if v in {"pendiente", "pagado", "exento"} else "pendiente"
         
-
         return {
             "fecha": _parse_date(form.get("fecha")),
             "profesion": form.get("profesion"),
@@ -541,8 +701,8 @@ def create_app():
             "nombre_profesional": form.get("nombre_profesional"),
             "nombre_comitente": form.get("nombre_comitente"),
             "ubicacion": form.get("ubicacion"),
-            "partida_inmobiliaria": form.get("partida_inmobiliaria"),  # <— NUEVO
-            "nro_expediente_municipal": form.get("nro_expediente_municipal"),  # <— NUEVO
+            "partida_inmobiliaria": form.get("partida_inmobiliaria"),
+            "nro_expediente_municipal": form.get("nro_expediente_municipal"),
             "visado_gas": _parse_bool(form.get("visado_gas")),
             "visado_salubridad": _parse_bool(form.get("visado_salubridad")),
             "visado_electrica": _parse_bool(form.get("visado_electrica")),
