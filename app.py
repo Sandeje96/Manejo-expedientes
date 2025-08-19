@@ -126,6 +126,31 @@ def create_app():
         gop_fecha_en_bandeja = _db.Column(_db.Date, nullable=True)  # NUEVO CAMPO
         gop_ultima_sincronizacion = _db.Column(_db.DateTime, nullable=True)
 
+        # AGREGAR ESTOS NUEVOS CAMPOS PARA BANDEJAS ESPECÍFICAS:
+        # Bandeja CPIM
+        bandeja_cpim_nombre = _db.Column(_db.String(200), nullable=True)
+        bandeja_cpim_usuario = _db.Column(_db.String(200), nullable=True)
+        bandeja_cpim_fecha = _db.Column(_db.Date, nullable=True)
+        bandeja_cpim_sincronizacion = _db.Column(_db.DateTime, nullable=True)
+        
+        # Bandeja IMLAUER
+        bandeja_imlauer_nombre = _db.Column(_db.String(200), nullable=True)
+        bandeja_imlauer_usuario = _db.Column(_db.String(200), nullable=True)
+        bandeja_imlauer_fecha = _db.Column(_db.Date, nullable=True)
+        bandeja_imlauer_sincronizacion = _db.Column(_db.DateTime, nullable=True)
+        
+        # Bandeja ONETTO
+        bandeja_onetto_nombre = _db.Column(_db.String(200), nullable=True)
+        bandeja_onetto_usuario = _db.Column(_db.String(200), nullable=True)
+        bandeja_onetto_fecha = _db.Column(_db.Date, nullable=True)
+        bandeja_onetto_sincronizacion = _db.Column(_db.DateTime, nullable=True)
+        
+        # Bandeja PROFESIONAL
+        bandeja_profesional_nombre = _db.Column(_db.String(200), nullable=True)
+        bandeja_profesional_usuario = _db.Column(_db.String(200), nullable=True)
+        bandeja_profesional_fecha = _db.Column(_db.Date, nullable=True)
+        bandeja_profesional_sincronizacion = _db.Column(_db.DateTime, nullable=True)
+
         # Contactos
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
         whatsapp_tramitador = _db.Column(_db.String(50), nullable=True)
@@ -182,6 +207,38 @@ def create_app():
             # Necesitamos acceder a la función desde el contexto de la app
             from flask import current_app
             return current_app._limpiar_bandeja_gop(self.gop_bandeja_actual)
+        
+        @property
+        def dias_en_bandeja_cpim(self):
+            """Calcula días en bandeja CPIM."""
+            if not self.bandeja_cpim_fecha:
+                return 0
+            from datetime import date
+            return (date.today() - self.bandeja_cpim_fecha).days
+
+        @property
+        def dias_en_bandeja_imlauer(self):
+            """Calcula días en bandeja IMLAUER."""
+            if not self.bandeja_imlauer_fecha:
+                return 0
+            from datetime import date
+            return (date.today() - self.bandeja_imlauer_fecha).days
+
+        @property
+        def dias_en_bandeja_onetto(self):
+            """Calcula días en bandeja ONETTO."""
+            if not self.bandeja_onetto_fecha:
+                return 0
+            from datetime import date
+            return (date.today() - self.bandeja_onetto_fecha).days
+
+        @property
+        def dias_en_bandeja_profesional(self):
+            """Calcula días en bandeja PROFESIONAL."""
+            if not self.bandeja_profesional_fecha:
+                return 0
+            from datetime import date
+            return (date.today() - self.bandeja_profesional_fecha).days
 
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
@@ -283,7 +340,7 @@ def create_app():
     
     @app.post("/gop/sincronizar")
     def sincronizar_gop():
-        """Ejecuta el scraper GOP y actualiza expedientes."""
+        """Ejecuta el scraper GOP y actualiza expedientes con información distribuida por bandejas."""
         try:
             from gop_integration import sync_gop_data
             stats = sync_gop_data()
@@ -295,9 +352,19 @@ def create_app():
                           f"Encontrados: {stats['total_gop_encontrados']} GOP, "
                           f"Actualizados: {stats['expedientes_actualizados']} expedientes")
                 
-                # Agregar detalles de fuentes
-                if stats.get('desde_mis_bandejas', 0) > 0 or stats.get('desde_todos_tramites', 0) > 0:
-                    mensaje += f" (Mis Bandejas: {stats.get('desde_mis_bandejas', 0)}, Todos: {stats.get('desde_todos_tramites', 0)})"
+                # Agregar detalles de bandejas específicas
+                detalles_bandejas = []
+                if stats.get('bandejas_cpim', 0) > 0:
+                    detalles_bandejas.append(f"CPIM: {stats['bandejas_cpim']}")
+                if stats.get('bandejas_imlauer', 0) > 0:
+                    detalles_bandejas.append(f"Imlauer: {stats['bandejas_imlauer']}")
+                if stats.get('bandejas_onetto', 0) > 0:
+                    detalles_bandejas.append(f"Onetto: {stats['bandejas_onetto']}")
+                if stats.get('bandejas_profesional', 0) > 0:
+                    detalles_bandejas.append(f"Profesional: {stats['bandejas_profesional']}")
+                
+                if detalles_bandejas:
+                    mensaje += f" ({', '.join(detalles_bandejas)})"
                 
                 if stats['expedientes_no_encontrados'] > 0:
                     mensaje += f", No encontrados: {stats['expedientes_no_encontrados']}"
@@ -544,9 +611,34 @@ def create_app():
         # Si todo falla, devolver texto original
         return texto
     
-    
+    def _determinar_bandeja_por_usuario(usuario_gop: str) -> str:
+        """
+        Determina a qué bandeja pertenece un usuario basándose en su nombre.
+        
+        Returns:
+            str: 'cpim', 'imlauer', 'onetto', 'profesional', o 'desconocido'
+        """
+        if not usuario_gop:
+            return 'desconocido'
+        
+        usuario = str(usuario_gop).lower().strip()
+        
+        # Patrones para identificar cada bandeja
+        if any(palabra in usuario for palabra in ['cpim', 'aguinagalde', 'gustavo', 'de jesús', 'santiago', 'javier']):
+            return 'cpim'
+        elif any(palabra in usuario for palabra in ['imlauer', 'fernando', 'sergio']):
+            return 'imlauer'
+        elif any(palabra in usuario for palabra in ['onetto']):
+            return 'onetto'
+        else:
+            # Si no coincide con ninguno específico, va a profesional
+            return 'profesional'
+        
+    # Registrar las funciones como métodos de la app
+    app._limpiar_bandeja_gop = _limpiar_bandeja_gop
+    app._determinar_bandeja_por_usuario = _determinar_bandeja_por_usuario
 
-    # O mejor aún, crear un filtro Jinja para usarlo directamente en las plantillas:
+    # Filtro Jinja para limpiar bandeja
     @app.template_filter("limpiar_bandeja")
     def _filtro_limpiar_bandeja(bandeja_texto):
         """Filtro Jinja para limpiar texto de bandeja GOP."""
