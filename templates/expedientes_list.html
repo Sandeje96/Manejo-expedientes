@@ -28,8 +28,8 @@
   <div class="col-sm-4 col-md-3 col-lg-2">
     <select class="form-select" name="formato" aria-label="Filtrar por formato">
       <option value="" {{ '' == (formato or '') and 'selected' or '' }}>Todos los formatos</option>
-      <option value="Papel" {{ (formato or '') == 'Papel' and 'selected' or '' }}>Papel</option>
-      <option value="Digital" {{ (formato or '') == 'Digital' and 'selected' or '' }}>Digital</option>
+      <option value="Papel" {{ (formato or '') == 'Papel' and 'selected' or '' }}>📄 Papel</option>
+      <option value="Digital" {{ (formato or '') == 'Digital' and 'selected' or '' }}>📱 Digital</option>
     </select>
   </div>
 
@@ -76,9 +76,9 @@
       </td>
       <td>
         {% if it.formato == 'Digital' %}
-          <span class="badge bg-info text-dark">Digital</span>
+          <span class="badge bg-info text-dark">📱 Digital</span>
         {% elif it.formato == 'Papel' %}
-          <span class="badge bg-secondary">Papel</span>
+          <span class="badge bg-secondary">📄 Papel</span>
         {% else %}
           <span class="text-muted">—</span>
         {% endif %}
@@ -99,7 +99,9 @@
 
       <!-- GOP -->
       <td>
-        {% if it.gop_numero %}
+        {% if it.formato == 'Papel' %}
+          <span class="text-muted small">No aplica</span>
+        {% elif it.gop_numero %}
           <span class="badge bg-primary">{{ it.gop_numero }}</span>
         {% else %}
           <span class="text-muted">-</span>
@@ -108,7 +110,9 @@
 
       <!-- BANDEJA CPIM -->
       <td style="max-width: 200px;">
-        {% if it.bandeja_cpim_nombre %}
+        {% if it.formato == 'Papel' %}
+          <span class="text-muted small">No aplica<br>(formato papel)</span>
+        {% elif it.bandeja_cpim_nombre %}
           <small class="text-success" style="word-break: break-word;">{{ it.bandeja_cpim_nombre|limpiar_bandeja }}</small>
           <br><small class="text-info">{{ it.bandeja_cpim_usuario or '-' }}</small>
           {% if it.bandeja_cpim_fecha %}
@@ -131,7 +135,9 @@
 
       <!-- BANDEJA IMLAUER -->
       <td style="max-width: 200px;">
-        {% if it.bandeja_imlauer_nombre %}
+        {% if it.formato == 'Papel' %}
+          <span class="text-muted small">No aplica<br>(formato papel)</span>
+        {% elif it.bandeja_imlauer_nombre %}
           <small class="text-success" style="word-break: break-word;">{{ it.bandeja_imlauer_nombre|limpiar_bandeja }}</small>
           <br><small class="text-info">{{ it.bandeja_imlauer_usuario or '-' }}</small>
           {% if it.bandeja_imlauer_fecha %}
@@ -154,7 +160,9 @@
 
       <!-- BANDEJA ONETTO -->
       <td style="max-width: 200px;">
-        {% if it.bandeja_onetto_nombre %}
+        {% if it.formato == 'Papel' %}
+          <span class="text-muted small">No aplica<br>(formato papel)</span>
+        {% elif it.bandeja_onetto_nombre %}
           <small class="text-success" style="word-break: break-word;">{{ it.bandeja_onetto_nombre|limpiar_bandeja }}</small>
           <br><small class="text-info">{{ it.bandeja_onetto_usuario or '-' }}</small>
           {% if it.bandeja_onetto_fecha %}
@@ -177,7 +185,9 @@
 
       <!-- BANDEJA PROFESIONAL -->
       <td style="max-width: 200px;">
-        {% if it.bandeja_profesional_nombre %}
+        {% if it.formato == 'Papel' %}
+          <span class="text-muted small">No aplica<br>(formato papel)</span>
+        {% elif it.bandeja_profesional_nombre %}
           <small class="text-success" style="word-break: break-word;">{{ it.bandeja_profesional_nombre|limpiar_bandeja }}</small>
           <br><small class="text-info">{{ it.bandeja_profesional_usuario or '-' }}</small>
           {% if it.bandeja_profesional_fecha %}

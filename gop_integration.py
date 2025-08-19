@@ -118,13 +118,13 @@ def sync_gop_data():
     """
     Ejecuta el scraper GOP y actualiza los expedientes con información distribuida por bandejas.
     Incluye lógica de fuente: "Todos los Trámites" -> siempre Bandeja PROFESIONAL.
-    AHORA CON ACTUALIZACIÓN DE HISTORIAL AUTOMÁTICA.
+    EXCLUYE expedientes en formato PAPEL del proceso de sincronización.
     """
     try:
         from app import _db
         
-        # === PASO 1: OBTENER TODOS LOS GOP DEL CPIM ===
-        current_app.logger.info("=== DIAGNÓSTICO: OBTENIENDO NÚMEROS GOP DEL CPIM ===")
+        # === PASO 1: OBTENER TODOS LOS GOP DEL CPIM (SOLO DIGITALES) ===
+        current_app.logger.info("=== DIAGNÓSTICO: OBTENIENDO NÚMEROS GOP DEL CPIM (SOLO DIGITALES) ===")
         
         gop_numbers = _db.session.execute(
             _db.text("""
@@ -133,11 +133,12 @@ def sync_gop_data():
                 WHERE gop_numero IS NOT NULL 
                 AND gop_numero != '' 
                 AND (finalizado = false OR finalizado IS NULL)
+                AND formato = 'Digital'
             """)
         ).fetchall()
         
         gop_list = [row[0].strip() for row in gop_numbers if row[0] and row[0].strip()]
-        current_app.logger.info(f"DIAGNÓSTICO: GOP encontrados en CPIM: {len(gop_list)} -> {gop_list}")
+        current_app.logger.info(f"DIAGNÓSTICO: GOP encontrados en CPIM (solo digitales): {len(gop_list)} -> {gop_list}")
         
         if not gop_list:
             return {
@@ -148,7 +149,7 @@ def sync_gop_data():
                 'bandejas_imlauer': 0,
                 'bandejas_onetto': 0,
                 'bandejas_profesional': 0,
-                'errores': ['No hay expedientes con números GOP en el CPIM']
+                'errores': ['No hay expedientes digitales con números GOP en el CPIM']
             }
         
         # === PASO 2: VERIFICAR CAMPOS EN BD ===
@@ -196,7 +197,7 @@ def sync_gop_data():
         
         current_app.logger.info(f"DIAGNÓSTICO: GOP únicos agrupados: {len(gop_agrupados)}")
 
-        # === PASO 5: PROCESAR CADA GOP ===
+        # === PASO 5: PROCESAR CADA GOP (SOLO DIGITALES) ===
         stats = {
             'total_gop_encontrados': len(gop_agrupados),
             'expedientes_actualizados': 0,
@@ -212,23 +213,32 @@ def sync_gop_data():
             try:
                 current_app.logger.info(f"DIAGNÓSTICO: Procesando GOP {gop_numero}")
                 
-                # Buscar expediente
+                # Buscar expediente - ASEGURAR QUE SEA DIGITAL
                 expediente_result = _db.session.execute(
-                    _db.text("SELECT id FROM expedientes WHERE gop_numero = :gop_numero"),
+                    _db.text("SELECT id, formato FROM expedientes WHERE gop_numero = :gop_numero AND formato = 'Digital'"),
                     {"gop_numero": gop_numero}
                 ).fetchone()
                 
                 if not expediente_result:
-                    error_msg = f"GOP {gop_numero} no encontrado en BD"
+                    error_msg = f"GOP {gop_numero} no encontrado en BD como expediente digital"
                     current_app.logger.warning(f"DIAGNÓSTICO: {error_msg}")
                     stats['errores'].append(error_msg)
                     continue
                 
                 expediente_id = expediente_result[0]
-                current_app.logger.info(f"DIAGNÓSTICO: Expediente ID {expediente_id} encontrado para GOP {gop_numero}")
+                formato = expediente_result[1]
+                
+                # Verificación adicional de seguridad
+                if formato != 'Digital':
+                    error_msg = f"GOP {gop_numero} no es formato digital (formato: {formato}), omitiendo sincronización"
+                    current_app.logger.warning(f"DIAGNÓSTICO: {error_msg}")
+                    stats['errores'].append(error_msg)
+                    continue
+                
+                current_app.logger.info(f"DIAGNÓSTICO: Expediente digital ID {expediente_id} encontrado para GOP {gop_numero}")
                 
                 # Limpiar bandejas primero
-                current_app.logger.info(f"DIAGNÓSTICO: Limpiando bandejas para expediente {expediente_id}")
+                current_app.logger.info(f"DIAGNÓSTICO: Limpiando bandejas para expediente digital {expediente_id}")
                 _limpiar_campos_bandeja(expediente_id, _db.session)
                 
                 # NUEVO: Recopilar datos para actualizar historial
@@ -314,7 +324,7 @@ def sync_gop_data():
                             gop_fecha_entrada = :fecha_entrada,
                             gop_fecha_en_bandeja = :fecha_en_bandeja,
                             gop_ultima_sincronizacion = :sync_time
-                        WHERE id = :expediente_id
+                        WHERE id = :expediente_id AND formato = 'Digital'
                     """),
                     {
                         "bandeja": str(primer_dato.get('bandeja_actual', ''))[:200],
@@ -329,15 +339,15 @@ def sync_gop_data():
                 
                 # NUEVO: Actualizar historial de bandejas
                 try:
-                    current_app.logger.info(f"DIAGNÓSTICO: Actualizando historial para expediente {expediente_id}")
+                    current_app.logger.info(f"DIAGNÓSTICO: Actualizando historial para expediente digital {expediente_id}")
                     _actualizar_historial_tras_sincronizacion(expediente_id, datos_bandejas_historial)
-                    current_app.logger.info(f"DIAGNÓSTICO: ✓ Historial actualizado para expediente {expediente_id}")
+                    current_app.logger.info(f"DIAGNÓSTICO: ✓ Historial actualizado para expediente digital {expediente_id}")
                 except Exception as hist_error:
                     current_app.logger.warning(f"DIAGNÓSTICO: Error actualizando historial para {expediente_id}: {hist_error}")
                     # No fallar la sincronización por un error en el historial
                 
                 stats['expedientes_actualizados'] += 1
-                current_app.logger.info(f"DIAGNÓSTICO: ✓ Expediente {expediente_id} actualizado completamente")
+                current_app.logger.info(f"DIAGNÓSTICO: ✓ Expediente digital {expediente_id} actualizado completamente")
                 
             except Exception as e:
                 error_msg = f"Error actualizando GOP {gop_numero}: {e}"
