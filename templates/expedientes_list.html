@@ -43,7 +43,7 @@
 
 <!-- Tabla más ancha con scroll horizontal -->
 <div class="table-responsive" style="overflow-x: auto;">
-<table class="table table-striped table-hover align-middle" style="min-width: 1800px;">
+<table class="table table-striped table-hover align-middle" style="min-width: 2000px;">
   <thead>
     <tr>
       <th style="width: 130px;">N° CPIM</th>
@@ -51,6 +51,7 @@
       <th style="width: 100px;">Formato</th>
       <th style="width: 180px;">Profesional</th>
       <th style="width: 180px;">Comitente</th>
+      <th style="width: 150px;">Partida Inmobiliaria</th>
       <th style="width: 120px;">Fecha de Pago</th>
       <th style="width: 100px;">GOP</th>
       <th style="width: 200px;">Bandeja CPIM</th>
@@ -88,6 +89,13 @@
       </td>
       <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_comitente or '' }}">
         {{ it.nombre_comitente or '' }}
+      </td>
+      <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.partida_inmobiliaria or '' }}">
+        {% if it.partida_inmobiliaria %}
+          <span class="badge bg-light text-dark border">{{ it.partida_inmobiliaria }}</span>
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
       </td>
       <td>
         {% if it.fecha_salida %}
@@ -265,7 +273,7 @@
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="15" class="text-center text-muted">Sin registros</td></tr>
+    <tr><td colspan="16" class="text-center text-muted">Sin registros</td></tr>
     {% endfor %}
   </tbody>
 </table>
