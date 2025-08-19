@@ -109,7 +109,7 @@
       <!-- Bandeja GOP -->
       <td style="max-width: 160px;">
         {% if it.gop_bandeja_actual %}
-          <small class="text-success" style="word-break: break-word;">{{ it.gop_bandeja_actual }}</small>
+          <small class="text-success" style="word-break: break-word;">{{ it.gop_bandeja_actual|limpiar_bandeja }}</small>
           {% if it.gop_ultima_sincronizacion %}
             <br><small class="text-muted">{{ it.gop_ultima_sincronizacion.strftime('%d/%m %H:%M') }}</small>
           {% endif %}

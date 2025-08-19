@@ -169,6 +169,19 @@ def create_app():
             hoy = date.today()
             delta = hoy - self.gop_fecha_en_bandeja
             return delta.days
+        
+        @property
+        def bandeja_gop_limpia(self):
+            """
+            Devuelve la bandeja GOP procesada, mostrando solo la bandeja actual.
+            """
+            if not self.gop_bandeja_actual:
+                return ""
+            
+            # Usar la función de limpieza que definimos arriba
+            # Necesitamos acceder a la función desde el contexto de la app
+            from flask import current_app
+            return current_app._limpiar_bandeja_gop(self.gop_bandeja_actual)
 
         def __repr__(self):
             return f"<Expediente {self.id} - {self.nro_expediente_cpim or ''}>"
@@ -449,6 +462,7 @@ def create_app():
         def _estado_norm(k):
             v = (form.get(k) or "").strip().lower()
             return v if v in {"pendiente", "pagado", "exento"} else "pendiente"
+        
 
         return {
             "fecha": _parse_date(form.get("fecha")),
@@ -478,6 +492,65 @@ def create_app():
             "finalizado": _parse_bool(form.get("finalizado")),
             "fecha_finalizado": _parse_datetime(form.get("fecha_finalizado")),
         }
+    
+    def _limpiar_bandeja_gop(bandeja_texto: str) -> str:
+        """
+        Extrae solo la bandeja actual del texto completo de bandeja GOP.
+        
+        Ejemplos:
+        - "07 - Ampliación 7 - 178 Visado final CPIM" → "Visado final CPIM"
+        - "04 - Registración 4 - 174 Visado de salubridad" → "Visado de salubridad" 
+        - "03 - Obra Nueva 3 - 167 Visado final CPIM" → "Visado final CPIM"
+        """
+        if not bandeja_texto:
+            return ""
+        
+        texto = str(bandeja_texto).strip()
+        
+        # Dividir por saltos de línea si los hay
+        lineas = texto.split('\n')
+        if len(lineas) > 1:
+            # Si hay múltiples líneas, procesar la última
+            texto = lineas[-1].strip()
+        
+        # Buscar el patrón: [tipo de trabajo] [número] - [número] [bandeja]
+        # Queremos extraer solo la parte de [bandeja]
+        import re
+        
+        # Patrón que busca: cualquier cosa, luego número - número texto
+        # El texto después del último "número - " es lo que queremos
+        matches = re.findall(r'\d+\s*-\s*(.+?)(?=\s+\d+\s*-|$)', texto)
+        
+        if len(matches) >= 2:
+            # Si encontramos múltiples matches, el último es la bandeja
+            return matches[-1].strip()
+        elif len(matches) == 1:
+            # Si solo hay un match, verificar si es la bandeja o el tipo de trabajo
+            match = matches[0].strip()
+            # Si contiene palabras típicas de bandeja, devolverlo
+            palabras_bandeja = ['visado', 'firma', 'liquidación', 'registración', 'final']
+            if any(palabra in match.lower() for palabra in palabras_bandeja):
+                return match
+        
+        # Método de respaldo: buscar todo después del último guión
+        partes = texto.split(' - ')
+        if len(partes) >= 2:
+            # Tomar la última parte
+            ultima_parte = partes[-1].strip()
+            # Verificar que no sea solo un número
+            if not ultima_parte.isdigit():
+                return ultima_parte
+        
+        # Si todo falla, devolver texto original
+        return texto
+    
+    
+
+    # O mejor aún, crear un filtro Jinja para usarlo directamente en las plantillas:
+    @app.template_filter("limpiar_bandeja")
+    def _filtro_limpiar_bandeja(bandeja_texto):
+        """Filtro Jinja para limpiar texto de bandeja GOP."""
+        return _limpiar_bandeja_gop(bandeja_texto)
 
     # === Helpers GCS ===
     def _get_gcs_client():
