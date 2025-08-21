@@ -183,145 +183,6 @@
     </div>
   </div>
 </div>
-{% endif %}
-
-<!-- Expedientes No Pagados -->
-{% if resultado.expedientes_no_pagados %}
-<div class="card mb-4">
-  <div class="card-header bg-warning text-dark">
-    <h5 class="card-title mb-0">⏳ Obras No Pagadas ({{ resultado.expedientes_no_pagados|length }})</h5>
-  </div>
-  <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead class="table-warning">
-          <tr>
-            <th>Fecha</th>
-            <th>Profesional</th>
-            <th>Comitente</th>
-            <th>Gas</th>
-            <th>Salubridad</th>
-            <th>Eléctrica</th>
-            <th>Electromecánica</th>
-            <th>Total Visados</th>
-            <th>N° CPIM</th>
-            <th>GOP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for exp in resultado.expedientes_no_pagados %}
-          <tr>
-            <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
-            <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
-            <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
-            <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
-            <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
-            <td><strong>{{ exp.total_visados|ars }}</strong></td>
-            <td>{{ exp.nro_expediente_cpim or '-' }}</td>
-            <td>{{ exp.gop_numero or '-' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- Acciones del Análisis -->
-{% if resultado.expedientes_pagados %}
-<div class="card mb-4 border-warning">
-  <div class="card-header bg-warning text-dark">
-    <h5 class="card-title mb-0">⚠️ Confirmar Cierre de Pago</h5>
-  </div>
-  <div class="card-body">
-    <div class="alert alert-warning">
-      <strong>¡Atención!</strong> Una vez confirmado el cierre, los <strong>{{ resultado.expedientes_pagados|length }} expedientes pagados</strong> 
-      serán marcados como procesados y no aparecerán en análisis futuros.
-    </div>
-    
-    <form method="post" action="{{ url_for('cerrar_analisis_tasas') }}" 
-          onsubmit="return confirm('¿Está seguro de que desea cerrar este análisis? Esta acción no se puede deshacer.')">
-      <div class="row g-3">
-        <div class="col-md-6">
-          <label for="nombre_cierre" class="form-label">Nombre del Cierre *</label>
-          <input type="text" class="form-control" id="nombre_cierre" name="nombre_cierre" 
-                 placeholder="Ej: Honorarios Julio 2025" required>
-        </div>
-        
-        <div class="col-md-6">
-          <label for="observaciones" class="form-label">Observaciones</label>
-          <input type="text" class="form-control" id="observaciones" name="observaciones" 
-                 placeholder="Observaciones adicionales (opcional)">
-        </div>
-        
-        <div class="col-12">
-          <button type="submit" class="btn btn-success">
-            ✅ Confirmar Cierre y Procesar Pago
-          </button>
-          <small class="text-muted ms-3">
-            Esto marcará {{ resultado.expedientes_pagados|length }} expedientes como procesados
-          </small>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
-{% endif %}
-
-{% endif %}
-
-<!-- Cierres Anteriores -->
-{% if cierres_anteriores %}
-<div class="card">
-  <div class="card-header">
-    <h5 class="card-title mb-0">📚 Cierres Anteriores</h5>
-  </div>
-  <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-sm">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Período</th>
-            <th>Fecha Cierre</th>
-            <th>Honorarios Imlauer</th>
-            <th>Honorarios Onetto</th>
-            <th>Para CPIM</th>
-            <th>Total</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for cierre in cierres_anteriores %}
-          <tr>
-            <td><strong>{{ cierre.nombre_cierre }}</strong></td>
-            <td>{{ cierre.fecha_desde.strftime('%d/%m/%Y') }} - {{ cierre.fecha_hasta.strftime('%d/%m/%Y') }}</td>
-            <td>{{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') }}</td>
-            <td>{{ cierre.total_imlauer|ars }}</td>
-            <td>{{ cierre.total_onetto|ars }}</td>
-            <td>{{ cierre.total_cpim|ars }}</td>
-            <td><strong>{{ cierre.total_general|ars }}</strong></td>
-            <td>
-              <a href="{{ url_for('ver_cierre_tasas', cierre_id=cierre.id) }}" class="btn btn-sm btn-outline-primary">
-                Ver Detalle
-              </a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-{% endblock %}
-    </div>
-  </div>
-</div>
 
 <!-- Expedientes Pagados -->
 {% if resultado.expedientes_pagados %}
@@ -371,3 +232,114 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Expedientes No Pagados -->
+{% if resultado.expedientes_no_pagados %}
+<div class="card mb-4">
+  <div class="card-header bg-warning text-dark">
+    <h5 class="card-title mb-0">⏳ Obras No Pagadas ({{ resultado.expedientes_no_pagados|length }})</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-warning">
+          <tr>
+            <th>Fecha</th>
+            <th>Profesional</th>
+            <th>Comitente</th>
+            <th>Gas</th>
+            <th>Salubridad</th>
+            <th>Eléctrica</th>
+            <th>Electromecánica</th>
+            <th>Total Visados</th>
+            <th>N° CPIM</th>
+            <th>GOP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exp in resultado.expedientes_no_pagados %}
+          <tr>
+            <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
+            <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
+            <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
+            <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
+            <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
+            <td><strong>{{ exp.total_visados|ars }}</strong></td>
+            <td>{{ exp.nro_expediente_cpim or '-' }}</td>
+            <td>{{ exp.gop_numero or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Mensaje sobre cierres (temporalmente desactivado) -->
+<div class="card mb-4">
+  <div class="card-header bg-secondary text-white">
+    <h5 class="card-title mb-0">🔧 Funcionalidad de Cierres</h5>
+  </div>
+  <div class="card-body">
+    <div class="alert alert-info">
+      <strong>En desarrollo:</strong> La funcionalidad de cierres oficiales estará disponible próximamente.
+      Por ahora puedes usar los análisis para calcular honorarios y exportar los resultados.
+    </div>
+  </div>
+</div>
+
+{% endif %}
+
+<!-- Cierres Anteriores (si existieran) -->
+{% if cierres_anteriores %}
+<div class="card">
+  <div class="card-header">
+    <h5 class="card-title mb-0">📚 Cierres Anteriores</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Período</th>
+            <th>Fecha Cierre</th>
+            <th>Honorarios Imlauer</th>
+            <th>Honorarios Onetto</th>
+            <th>Para CPIM</th>
+            <th>Total</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cierre in cierres_anteriores %}
+          <tr>
+            <td><strong>{{ cierre.nombre_cierre }}</strong></td>
+            <td>{{ cierre.fecha_desde.strftime('%d/%m/%Y') }} - {{ cierre.fecha_hasta.strftime('%d/%m/%Y') }}</td>
+            <td>{{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>{{ cierre.total_imlauer|ars }}</td>
+            <td>{{ cierre.total_onetto|ars }}</td>
+            <td>{{ cierre.total_cpim|ars }}</td>
+            <td><strong>{{ cierre.total_general|ars }}</strong></td>
+            <td>
+              <a href="{{ url_for('ver_cierre_tasas', cierre_id=cierre.id) }}" class="btn btn-sm btn-outline-primary">
+                Ver Detalle
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

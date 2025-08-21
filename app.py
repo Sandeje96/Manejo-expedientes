@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date
 
-from flask import Flask, render_template, request, redirect, url_for, flash, current_app
+from flask import Flask, render_template, request, redirect, url_for, flash, current_app, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import or_
@@ -881,7 +881,15 @@ def create_app():
                 'fecha_desde': fecha_desde_str,
                 'fecha_hasta': fecha_hasta_str,
                 'incluir_no_pagados': incluir_no_pagados,
-                'resultado': resultado
+                'resultado': {
+                    'fecha_desde': fecha_desde,  # Usar el objeto date, no el string
+                    'fecha_hasta': fecha_hasta,  # Usar el objeto date, no el string
+                    'expedientes_pagados': resultado['expedientes_pagados'],
+                    'expedientes_no_pagados': resultado['expedientes_no_pagados'],
+                    'totales_por_tipo': resultado['totales_por_tipo'],
+                    'honorarios': resultado['honorarios'],
+                    'resumen': resultado['resumen']
+                }
             }
             
             return render_template("analisis_tasas.html", 
@@ -947,6 +955,7 @@ def create_app():
     def exportar_analisis_tasas(formato):
         """Exporta el último análisis en el formato especificado (excel o pdf)."""
         from flask import session, send_file
+        from datetime import datetime, date
         import io
         
         try:
@@ -956,7 +965,43 @@ def create_app():
                 flash('No hay análisis para exportar', 'warning')
                 return redirect(url_for('analisis_tasas'))
             
-            resultado = ultimo_analisis['resultado']
+            resultado = ultimo_analisis['resultado'].copy()
+            
+            # IMPORTANTE: Convertir las fechas de string a objetos date
+            # Flask puede usar diferentes formatos dependiendo de cómo se serializan
+            def parse_fecha(fecha_str):
+                if not fecha_str or not isinstance(fecha_str, str):
+                    return fecha_str
+                
+                formatos = [
+                    '%Y-%m-%d',  # Formato ISO
+                    '%a, %d %b %Y %H:%M:%S GMT',  # Formato GMT
+                    '%Y-%m-%d %H:%M:%S',  # Formato datetime
+                ]
+                
+                for formato in formatos:
+                    try:
+                        return datetime.strptime(fecha_str, formato).date()
+                    except ValueError:
+                        continue
+                
+                # Si ningún formato funciona, intentar parsearlo de otra manera
+                try:
+                    return datetime.fromisoformat(fecha_str.replace('T', ' ').replace('Z', '')).date()
+                except:
+                    return fecha_str
+            
+            resultado['fecha_desde'] = parse_fecha(resultado['fecha_desde'])
+            resultado['fecha_hasta'] = parse_fecha(resultado['fecha_hasta'])
+            
+            # También convertir fechas en expedientes
+            for exp in resultado.get('expedientes_pagados', []):
+                if exp.get('fecha'):
+                    exp['fecha'] = parse_fecha(exp['fecha'])
+            
+            for exp in resultado.get('expedientes_no_pagados', []):
+                if exp.get('fecha'):
+                    exp['fecha'] = parse_fecha(exp['fecha'])
             
             if formato.lower() == 'excel':
                 return _generar_excel_tasas(resultado)
@@ -968,6 +1013,8 @@ def create_app():
         
         except Exception as e:
             current_app.logger.error(f"Error exportando análisis: {e}")
+            import traceback
+            current_app.logger.error(f"Traceback: {traceback.format_exc()}")
             flash(f"Error generando exportación: {e}", 'danger')
             return redirect(url_for('analisis_tasas'))
     
