@@ -295,7 +295,39 @@
         <tr><th>N° de copias</th><td>{{ item.nro_copias or '-' }}</td></tr>
         <tr><th>Tipo de trabajo</th><td>{{ item.tipo_trabajo or '-' }}</td></tr>
         <tr><th>N° expediente CPIM</th><td>{{ item.nro_expediente_cpim or '-' }}</td></tr>
-        <tr><th>Profesional</th><td>{{ item.nombre_profesional or '-' }}</td></tr>
+        <tr>
+          <th style="width:260px">Profesional(es)</th>
+          <td>
+            {% set todos_profesionales = item.todos_los_profesionales %}
+            {% if todos_profesionales %}
+              {% for profesional in todos_profesionales %}
+                <div class="mb-2">
+                  {% if profesional.es_principal %}
+                    <!-- Profesional Principal -->
+                    <div class="d-flex align-items-center">
+                      <span class="badge bg-primary me-2">Principal</span>
+                      <strong class="text-primary">{{ profesional.nombre }}</strong>
+                    </div>
+                    {% if profesional.whatsapp %}
+                      <small class="text-muted ms-5">📱 {{ profesional.whatsapp }}</small>
+                    {% endif %}
+                  {% else %}
+                    <!-- Profesional Adicional -->
+                    <div class="d-flex align-items-center mt-2 pt-2" style="border-top: 1px solid #dee2e6;">
+                      <span class="badge bg-secondary me-2">Adicional</span>
+                      <strong class="text-dark">{{ profesional.nombre }}</strong>
+                    </div>
+                    {% if profesional.whatsapp %}
+                      <small class="text-muted ms-5">📱 {{ profesional.whatsapp }}</small>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
         <tr><th>Comitente</th><td>{{ item.nombre_comitente or '-' }}</td></tr>
         <tr><th>Ubicación</th><td>{{ item.ubicacion or '-' }}</td></tr>
         <tr><th>Partida Inmobiliaria</th><td>{{ item.partida_inmobiliaria or '-' }}</td></tr>
@@ -366,7 +398,7 @@
         <tr><th>Archivos PDF</th><td><span class="text-muted">No aplica (formato papel)</span></td></tr>
         {% endif %}
 
-        <tr><th>WhatsApp Profesional</th><td>{{ item.whatsapp_profesional or '-' }}</td></tr>
+  
         <tr><th>WhatsApp Tramitador</th><td>{{ item.whatsapp_tramitador or '-' }}</td></tr>
         <tr><th>Creado</th><td>{{ item.created_at }}</td></tr>
         <tr><th>Actualizado</th><td>{{ item.updated_at }}</td></tr>

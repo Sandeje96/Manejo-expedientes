@@ -165,6 +165,52 @@ def create_app():
 
         # Relación con archivos
         archivos = _db.relationship("Archivo", backref="expediente", cascade="all, delete-orphan")
+        profesionales_adicionales = _db.relationship("ProfesionalAdicional", backref="expediente", 
+                                                    cascade="all, delete-orphan", 
+                                                    order_by="ProfesionalAdicional.orden")
+        
+        @property
+        def todos_los_profesionales(self):
+            """
+            Retorna una lista con todos los profesionales del expediente.
+            El primer elemento es siempre el profesional principal.
+            """
+            profesionales = []
+            
+            # Agregar profesional principal
+            if self.nombre_profesional:
+                profesionales.append({
+                    'nombre': self.nombre_profesional,
+                    'whatsapp': self.whatsapp_profesional,
+                    'es_principal': True
+                })
+            
+            # Agregar profesionales adicionales
+            for prof_adic in self.profesionales_adicionales:
+                profesionales.append({
+                    'nombre': prof_adic.nombre_profesional,
+                    'whatsapp': prof_adic.whatsapp_profesional,
+                    'es_principal': False
+                })
+            
+            return profesionales
+        
+        @property
+        def nombres_profesionales_concatenados(self):
+            """
+            Retorna todos los nombres de profesionales concatenados para mostrar en la tabla.
+            """
+            nombres = []
+            
+            # Agregar profesional principal
+            if self.nombre_profesional:
+                nombres.append(self.nombre_profesional)
+            
+            # Agregar profesionales adicionales
+            for prof_adic in self.profesionales_adicionales:
+                nombres.append(prof_adic.nombre_profesional)
+            
+            return nombres
 
         # Conveniencia: total de visados
         @property
@@ -369,6 +415,23 @@ def create_app():
         size_bytes = _db.Column(_db.Integer, nullable=True)
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
 
+    class ProfesionalAdicional(_db.Model):
+        """Modelo para profesionales adicionales de un expediente."""
+        __tablename__ = "profesionales_adicionales"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id", ondelete="CASCADE"), nullable=False)
+        nombre_profesional = _db.Column(_db.String(200), nullable=False)
+        whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
+        orden = _db.Column(_db.Integer, nullable=True)  # Para ordenar los profesionales
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        def __repr__(self):
+            return f"<ProfesionalAdicional {self.id} - {self.nombre_profesional}>"
+
     class HistorialBandeja(_db.Model):
         """Modelo para tracking del historial de días por bandeja de cada expediente."""
         __tablename__ = "historial_bandejas"
@@ -475,6 +538,8 @@ def create_app():
         try:
             # Necesitamos ID para asociar archivos
             _db.session.flush()
+
+            _save_profesionales_adicionales(exp, request.form)
 
             # Si es Digital, subimos PDFs (si vinieron)
             if formato == "Digital":
@@ -586,6 +651,8 @@ def create_app():
 
         for k, v in data.items():
             setattr(item, k, v)
+
+        _save_profesionales_adicionales(item, request.form)
 
         try:
             # Si es Digital y llegan nuevos PDFs, súbelos
@@ -779,6 +846,30 @@ def create_app():
             "finalizado": _parse_bool(form.get("finalizado")),
             "fecha_finalizado": _parse_datetime(form.get("fecha_finalizado")),
         }
+    
+    def _save_profesionales_adicionales(expediente, form):
+        """Guarda los profesionales adicionales de un expediente."""
+        # Obtener los datos de profesionales adicionales del formulario
+        nombres = form.getlist('profesionales_adicionales_nombre[]')
+        whatsapps = form.getlist('profesionales_adicionales_whatsapp[]')
+        
+        # Eliminar profesionales adicionales existentes
+        for prof_existente in expediente.profesionales_adicionales:
+            _db.session.delete(prof_existente)
+        
+        # Agregar nuevos profesionales adicionales
+        for i, nombre in enumerate(nombres):
+            nombre = nombre.strip()
+            if nombre:  # Solo agregar si el nombre no está vacío
+                whatsapp = whatsapps[i].strip() if i < len(whatsapps) else ""
+                
+                profesional_adicional = ProfesionalAdicional(
+                    expediente_id=expediente.id,
+                    nombre_profesional=nombre,
+                    whatsapp_profesional=whatsapp if whatsapp else None,
+                    orden=i + 1
+                )
+                _db.session.add(profesional_adicional)
     
     def _limpiar_bandeja_gop(bandeja_texto: str) -> str:
         """

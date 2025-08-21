@@ -65,17 +65,95 @@
            value="{{ (item.nro_expediente_cpim if item else '') or '' }}">
   </div>
 
-  <!-- Profesional / Comitente -->
+  <!-- Profesional Principal -->
   <div class="col-md-6">
-    <label class="form-label">Nombre profesional</label>
-    <input type="text" name="nombre_profesional" class="form-control"
+    <label class="form-label">Nombre profesional principal</label>
+    <input type="text" name="nombre_profesional" class="form-control" required
            value="{{ (item.nombre_profesional if item else '') or '' }}">
   </div>
+  
+  <!-- WhatsApp Profesional Principal -->
+  <div class="col-md-6">
+    <label class="form-label">WhatsApp profesional principal</label>
+    <input type="text" name="whatsapp_profesional" class="form-control"
+           value="{{ (item.whatsapp_profesional if item else '') or '' }}">
+  </div>
+
+  <!-- Profesionales Adicionales -->
+  <div class="col-12">
+    <div class="card border-info">
+      <div class="card-header bg-light">
+        <h6 class="mb-0">Profesionales Adicionales</h6>
+        <small class="text-muted">Si hay más de un profesional involucrado en este expediente</small>
+      </div>
+      <div class="card-body">
+        <div id="profesionales-adicionales">
+          {% if item and item.profesionales_adicionales %}
+            {% for prof_adic in item.profesionales_adicionales %}
+            <div class="row g-2 mb-2 profesional-adicional-item">
+              <div class="col-md-5">
+                <input type="text" name="profesionales_adicionales_nombre[]" 
+                       class="form-control" placeholder="Nombre del profesional" 
+                       value="{{ prof_adic.nombre_profesional }}">
+              </div>
+              <div class="col-md-4">
+                <input type="text" name="profesionales_adicionales_whatsapp[]" 
+                       class="form-control" placeholder="WhatsApp" 
+                       value="{{ prof_adic.whatsapp_profesional or '' }}">
+              </div>
+              <div class="col-md-3">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
+                  Eliminar
+                </button>
+              </div>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+        
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarProfesional()">
+          + Agregar Profesional
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comitente -->
   <div class="col-md-6">
     <label class="form-label">Nombre comitente</label>
     <input type="text" name="nombre_comitente" class="form-control"
            value="{{ (item.nombre_comitente if item else '') or '' }}">
   </div>
+
+  <!-- JavaScript para manejar profesionales adicionales -->
+  <script>
+  function agregarProfesional() {
+    const container = document.getElementById('profesionales-adicionales');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 profesional-adicional-item';
+    div.innerHTML = `
+      <div class="col-md-5">
+        <input type="text" name="profesionales_adicionales_nombre[]" 
+               class="form-control" placeholder="Nombre del profesional">
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="profesionales_adicionales_whatsapp[]" 
+               class="form-control" placeholder="WhatsApp">
+      </div>
+      <div class="col-md-3">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
+          Eliminar
+        </button>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+
+  function eliminarProfesional(button) {
+    const item = button.closest('.profesional-adicional-item');
+    item.remove();
+  }
+  </script>
 
   <!-- Ubicación -->
   <div class="col-12">

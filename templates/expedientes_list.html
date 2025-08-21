@@ -84,8 +84,25 @@
           <span class="text-muted">—</span>
         {% endif %}
       </td>
-      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_profesional or '' }}">
-        {{ it.nombre_profesional or '' }}
+      <td style="max-width: 180px;">
+        {% set todos_profesionales = it.nombres_profesionales_concatenados %}
+        {% if todos_profesionales %}
+          <!-- Mostrar profesional principal -->
+          <div class="fw-bold text-primary" style="font-size: 0.9em;">
+            {{ todos_profesionales[0] }}
+          </div>
+          
+          <!-- Mostrar profesionales adicionales si existen -->
+          {% if todos_profesionales|length > 1 %}
+            {% for profesional in todos_profesionales[1:] %}
+              <div class="text-muted" style="font-size: 0.8em; border-left: 2px solid #dee2e6; padding-left: 8px; margin-top: 2px;">
+                {{ profesional }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
       </td>
       <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_comitente or '' }}">
         {{ it.nombre_comitente or '' }}
