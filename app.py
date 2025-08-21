@@ -162,6 +162,8 @@ def create_app():
         # Metadatos
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
         updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        incluido_en_cierre_id = _db.Column(_db.Integer, nullable=True)
+        fecha_inclusion_cierre = _db.Column(_db.DateTime, nullable=True)
 
         # Relación con archivos
         archivos = _db.relationship("Archivo", backref="expediente", cascade="all, delete-orphan")
@@ -477,6 +479,52 @@ def create_app():
         
         def __repr__(self):
             return f"<HistorialBandeja {self.expediente_id} - {self.bandeja_tipo} ({self.fecha_inicio} a {self.fecha_fin or 'actual'})>"
+        
+
+    class CierreTasas(_db.Model):
+        """Modelo para registrar cierres de tasas de visado."""
+        __tablename__ = "cierres_tasas"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        nombre_cierre = _db.Column(_db.String(200), nullable=False)
+        fecha_desde = _db.Column(_db.Date, nullable=False)
+        fecha_hasta = _db.Column(_db.Date, nullable=False)
+        fecha_cierre = _db.Column(_db.DateTime, nullable=False)
+        usuario_cierre = _db.Column(_db.String(100), nullable=True)
+        
+        # Totales calculados
+        total_imlauer = _db.Column(_db.Numeric(12, 2), nullable=True)
+        total_onetto = _db.Column(_db.Numeric(12, 2), nullable=True)
+        total_cpim = _db.Column(_db.Numeric(12, 2), nullable=True)
+        total_general = _db.Column(_db.Numeric(12, 2), nullable=True)
+        
+        # Expedientes incluidos (JSON)
+        expedientes_incluidos = _db.Column(_db.Text, nullable=True)
+        observaciones = _db.Column(_db.Text, nullable=True)
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        @property
+        def expedientes_incluidos_list(self):
+            """Convierte el JSON de expedientes a lista."""
+            if self.expedientes_incluidos:
+                try:
+                    import json
+                    return json.loads(self.expedientes_incluidos)
+                except:
+                    return []
+            return []
+        
+        @expedientes_incluidos_list.setter
+        def expedientes_incluidos_list(self, value):
+            """Convierte lista a JSON para almacenar."""
+            import json
+            self.expedientes_incluidos = json.dumps(value)
+        
+        def __repr__(self):
+            return f"<CierreTasas {self.id} - {self.nombre_cierre} ({self.fecha_desde} a {self.fecha_hasta})>"
 
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
@@ -781,6 +829,368 @@ def create_app():
             current_app.logger.error(f"Error generando documento adicional para expediente {item_id}: {e}")
             flash(f"Error generando documento adicional: {e}", "danger")
             return redirect(url_for('detalle_expediente', item_id=item_id))
+        
+    # === RUTAS PARA ANÁLISIS DE TASAS ===
+    @app.get("/analisis-tasas")
+    def analisis_tasas():
+        """Página principal del análisis de tasas."""
+        # Importar aquí para evitar imports circulares
+        from tasas_analyzer import TasasAnalyzer
+        
+        # Obtener cierres anteriores para mostrar
+        analyzer = TasasAnalyzer(_db.session)
+        cierres_anteriores = analyzer.obtener_cierres_anteriores(5)
+        
+        return render_template("analisis_tasas.html", cierres_anteriores=cierres_anteriores)
+    
+    @app.post("/analisis-tasas/ejecutar")
+    def ejecutar_analisis_tasas():
+        """Ejecuta el análisis de tasas según los parámetros recibidos."""
+        from tasas_analyzer import TasasAnalyzer
+        
+        try:
+            # Obtener parámetros del formulario
+            fecha_desde_str = request.form.get('fecha_desde')
+            fecha_hasta_str = request.form.get('fecha_hasta')
+            incluir_no_pagados = request.form.get('incluir_no_pagados') == 'on'
+            
+            # Validar fechas
+            if not fecha_desde_str or not fecha_hasta_str:
+                flash('Debe seleccionar fechas de inicio y fin', 'danger')
+                return redirect(url_for('analisis_tasas'))
+            
+            # Convertir fechas
+            fecha_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d').date()
+            fecha_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d').date()
+            
+            # Validar rango de fechas
+            if fecha_desde > fecha_hasta:
+                flash('La fecha de inicio no puede ser mayor a la fecha de fin', 'danger')
+                return redirect(url_for('analisis_tasas'))
+            
+            # Ejecutar análisis
+            analyzer = TasasAnalyzer(_db.session)
+            resultado = analyzer.analizar_periodo(fecha_desde, fecha_hasta, incluir_no_pagados)
+            
+            # Obtener cierres anteriores
+            cierres_anteriores = analyzer.obtener_cierres_anteriores(5)
+            
+            # Agregar datos del análisis a la sesión para usar en exportación
+            from flask import session
+            session['ultimo_analisis'] = {
+                'fecha_desde': fecha_desde_str,
+                'fecha_hasta': fecha_hasta_str,
+                'incluir_no_pagados': incluir_no_pagados,
+                'resultado': resultado
+            }
+            
+            return render_template("analisis_tasas.html", 
+                                 resultado=resultado, 
+                                 cierres_anteriores=cierres_anteriores,
+                                 fecha_desde=fecha_desde_str,
+                                 fecha_hasta=fecha_hasta_str,
+                                 incluir_no_pagados=incluir_no_pagados)
+        
+        except Exception as e:
+            current_app.logger.error(f"Error en análisis de tasas: {e}")
+            flash(f"Error ejecutando análisis: {e}", 'danger')
+            return redirect(url_for('analisis_tasas'))
+    
+    @app.post("/analisis-tasas/cerrar")
+    def cerrar_analisis_tasas():
+        """Cierra oficialmente un análisis de tasas, marcando expedientes como procesados."""
+        from tasas_analyzer import TasasAnalyzer
+        from flask import session
+        
+        try:
+            # Obtener datos del análisis desde la sesión
+            ultimo_analisis = session.get('ultimo_analisis')
+            if not ultimo_analisis:
+                flash('No hay análisis pendiente para cerrar', 'warning')
+                return redirect(url_for('analisis_tasas'))
+            
+            # Obtener parámetros del cierre
+            nombre_cierre = request.form.get('nombre_cierre', '').strip()
+            observaciones = request.form.get('observaciones', '').strip()
+            
+            if not nombre_cierre:
+                flash('Debe proporcionar un nombre para el cierre', 'danger')
+                return redirect(url_for('analisis_tasas'))
+            
+            # Verificar que hay expedientes pagados para cerrar
+            resultado = ultimo_analisis['resultado']
+            if not resultado['expedientes_pagados']:
+                flash('No hay expedientes pagados en este período para cerrar', 'warning')
+                return redirect(url_for('analisis_tasas'))
+            
+            # Ejecutar cierre
+            analyzer = TasasAnalyzer(_db.session)
+            cierre = analyzer.crear_cierre(
+                analisis_datos=resultado,
+                nombre_cierre=nombre_cierre,
+                usuario_cierre="Sistema",  # Podrías implementar autenticación aquí
+                observaciones=observaciones
+            )
+            
+            # Limpiar sesión
+            session.pop('ultimo_analisis', None)
+            
+            flash(f'Cierre "{nombre_cierre}" creado exitosamente. {len(resultado["expedientes_pagados"])} expedientes procesados.', 'success')
+            return redirect(url_for('analisis_tasas'))
+        
+        except Exception as e:
+            current_app.logger.error(f"Error creando cierre: {e}")
+            flash(f"Error creando cierre: {e}", 'danger')
+            return redirect(url_for('analisis_tasas'))
+    
+    @app.get("/analisis-tasas/exportar/<formato>")
+    def exportar_analisis_tasas(formato):
+        """Exporta el último análisis en el formato especificado (excel o pdf)."""
+        from flask import session, send_file
+        import io
+        
+        try:
+            # Obtener datos del análisis desde la sesión
+            ultimo_analisis = session.get('ultimo_analisis')
+            if not ultimo_analisis:
+                flash('No hay análisis para exportar', 'warning')
+                return redirect(url_for('analisis_tasas'))
+            
+            resultado = ultimo_analisis['resultado']
+            
+            if formato.lower() == 'excel':
+                return _generar_excel_tasas(resultado)
+            elif formato.lower() == 'pdf':
+                return _generar_pdf_tasas(resultado)
+            else:
+                flash('Formato de exportación no válido', 'danger')
+                return redirect(url_for('analisis_tasas'))
+        
+        except Exception as e:
+            current_app.logger.error(f"Error exportando análisis: {e}")
+            flash(f"Error generando exportación: {e}", 'danger')
+            return redirect(url_for('analisis_tasas'))
+    
+    @app.get("/analisis-tasas/cierre/<int:cierre_id>")
+    def ver_cierre_tasas(cierre_id):
+        """Muestra los detalles de un cierre específico."""
+        cierre = CierreTasas.query.get_or_404(cierre_id)
+        
+        # Obtener expedientes incluidos en el cierre
+        expedientes_ids = cierre.expedientes_incluidos_list
+        expedientes = Expediente.query.filter(Expediente.id.in_(expedientes_ids)).all() if expedientes_ids else []
+        
+        return render_template("detalle_cierre_tasas.html", cierre=cierre, expedientes=expedientes)
+    
+    # === FUNCIONES AUXILIARES PARA EXPORTACIÓN ===
+    def _generar_excel_tasas(resultado):
+        """Genera archivo Excel con el análisis de tasas."""
+        import pandas as pd
+        from io import BytesIO
+        
+        # Crear archivo Excel en memoria
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Hoja 1: Expedientes Pagados
+            if resultado['expedientes_pagados']:
+                df_pagados = pd.DataFrame(resultado['expedientes_pagados'])
+                # Formatear columnas de dinero
+                for col in ['gas', 'salubridad', 'electrica', 'electromecanica', 'total_visados']:
+                    if col in df_pagados.columns:
+                        df_pagados[col] = df_pagados[col].astype(float)
+                
+                df_pagados.to_excel(writer, sheet_name='Obras Pagadas', index=False)
+            
+            # Hoja 2: Expedientes No Pagados
+            if resultado['expedientes_no_pagados']:
+                df_no_pagados = pd.DataFrame(resultado['expedientes_no_pagados'])
+                # Formatear columnas de dinero
+                for col in ['gas', 'salubridad', 'electrica', 'electromecanica', 'total_visados']:
+                    if col in df_no_pagados.columns:
+                        df_no_pagados[col] = df_no_pagados[col].astype(float)
+                
+                df_no_pagados.to_excel(writer, sheet_name='Obras No Pagadas', index=False)
+            
+            # Hoja 3: Resumen de Honorarios
+            honorarios_data = []
+            
+            # Totales por tipo de visado
+            honorarios_data.append(['TOTALES POR TIPO DE VISADO (Solo obras pagadas)', '', '', ''])
+            honorarios_data.append(['Tipo de Visado', 'Total Pagado', 'Ingeniero Responsable', ''])
+            honorarios_data.append(['Gas', float(resultado['totales_por_tipo']['gas']), 'IMLAUER FERNANDO', ''])
+            honorarios_data.append(['Salubridad', float(resultado['totales_por_tipo']['salubridad']), 'IMLAUER FERNANDO', ''])
+            honorarios_data.append(['Eléctrica', float(resultado['totales_por_tipo']['electrica']), 'ONETTO JOSÉ', ''])
+            honorarios_data.append(['Electromecánica', float(resultado['totales_por_tipo']['electromecanica']), 'ONETTO JOSÉ', ''])
+            honorarios_data.append(['', '', '', ''])
+            
+            # Cálculo de honorarios
+            honorarios_data.append(['CÁLCULO DE HONORARIOS POR INGENIERO', '', '', ''])
+            honorarios_data.append(['Ingeniero', 'Total Tasas', 'Para Consejo (30%)', 'Para Ingeniero (70%)'])
+            
+            imlauer_data = resultado['honorarios']['imlauer']
+            onetto_data = resultado['honorarios']['onetto']
+            
+            honorarios_data.append(['IMLAUER FERNANDO', 
+                                   float(imlauer_data['total_tasas']), 
+                                   float(imlauer_data['para_cpim']), 
+                                   float(imlauer_data['para_ingeniero'])])
+            
+            honorarios_data.append(['ONETTO JOSÉ', 
+                                   float(onetto_data['total_tasas']), 
+                                   float(onetto_data['para_cpim']), 
+                                   float(onetto_data['para_ingeniero'])])
+            
+            honorarios_data.append(['', '', '', ''])
+            
+            # Totales generales
+            totales_generales = resultado['honorarios']['totales_generales']
+            honorarios_data.append(['TOTALES GENERALES', '', '', ''])
+            honorarios_data.append(['Total de todas las tasas:', float(totales_generales['total_todas_tasas']), '', ''])
+            honorarios_data.append(['Total para el Consejo (30%):', float(totales_generales['total_para_cpim']), '', ''])
+            honorarios_data.append(['Total para ingenieros (70%):', float(totales_generales['total_para_ingenieros']), '', ''])
+            
+            df_honorarios = pd.DataFrame(honorarios_data)
+            df_honorarios.to_excel(writer, sheet_name='Cálculo Honorarios', index=False, header=False)
+        
+        output.seek(0)
+        
+        # Generar nombre de archivo
+        fecha_desde = resultado['fecha_desde'].strftime('%d%m%Y')
+        fecha_hasta = resultado['fecha_hasta'].strftime('%d%m%Y')
+        filename = f"Analisis_Tasas_{fecha_desde}_{fecha_hasta}.xlsx"
+        
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    
+    def _generar_pdf_tasas(resultado):
+        """Genera archivo PDF con el análisis de tasas."""
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.units import inch
+        from io import BytesIO
+        
+        # Crear PDF en memoria
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), topMargin=0.5*inch)
+        
+        # Estilos
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            textColor=colors.HexColor('#1f4e79'),
+            alignment=1  # Centrado
+        )
+        
+        subtitle_style = ParagraphStyle(
+            'CustomSubtitle',
+            parent=styles['Heading2'],
+            fontSize=12,
+            textColor=colors.HexColor('#1f4e79'),
+            alignment=1
+        )
+        
+        # Contenido del PDF
+        story = []
+        
+        # Título
+        fecha_desde = resultado['fecha_desde'].strftime('%d/%m/%Y')
+        fecha_hasta = resultado['fecha_hasta'].strftime('%d/%m/%Y')
+        titulo = f"ANÁLISIS DE TASAS DE VISADO - {fecha_desde} - {fecha_hasta}"
+        story.append(Paragraph(titulo, title_style))
+        story.append(Spacer(1, 20))
+        
+        # Resumen ejecutivo
+        resumen = resultado['resumen']
+        story.append(Paragraph("RESUMEN EJECUTIVO", subtitle_style))
+        resumen_data = [
+            ['Concepto', 'Cantidad/Monto'],
+            ['Expedientes Pagados', str(resumen['cantidad_expedientes_pagados'])],
+            ['Expedientes No Pagados', str(resumen['cantidad_expedientes_no_pagados'])],
+            ['Total General de Tasas', f"$ {resumen['total_general']:,.2f}"],
+            ['Honorarios Ing. Imlauer', f"$ {resumen['honorarios_imlauer']:,.2f}"],
+            ['Honorarios Ing. Onetto', f"$ {resumen['honorarios_onetto']:,.2f}"],
+            ['Para CPIM (30%)', f"$ {resumen['honorarios_cpim']:,.2f}"]
+        ]
+        
+        resumen_table = Table(resumen_data, colWidths=[3*inch, 2*inch])
+        resumen_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e79')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(resumen_table)
+        story.append(Spacer(1, 30))
+        
+        # Tabla de cálculo de honorarios
+        story.append(Paragraph("CÁLCULO DE HONORARIOS POR INGENIERO", subtitle_style))
+        
+        honorarios_data = [
+            ['Ingeniero', 'Total Tasas', 'Para Consejo (30%)', 'Para Ingeniero (70%)', 'Tipos de Visado']
+        ]
+        
+        imlauer = resultado['honorarios']['imlauer']
+        onetto = resultado['honorarios']['onetto']
+        
+        honorarios_data.append([
+            'IMLAUER FERNANDO',
+            f"$ {imlauer['total_tasas']:,.2f}",
+            f"$ {imlauer['para_cpim']:,.2f}",
+            f"$ {imlauer['para_ingeniero']:,.2f}",
+            'Gas, Salubridad'
+        ])
+        
+        honorarios_data.append([
+            'ONETTO JOSÉ',
+            f"$ {onetto['total_tasas']:,.2f}",
+            f"$ {onetto['para_cpim']:,.2f}",
+            f"$ {onetto['para_ingeniero']:,.2f}",
+            'Eléctrica, Electromecánica'
+        ])
+        
+        honorarios_table = Table(honorarios_data, colWidths=[2*inch, 1.5*inch, 1.5*inch, 1.5*inch, 2*inch])
+        honorarios_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e79')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(honorarios_table)
+        
+        # Construir PDF
+        doc.build(story)
+        buffer.seek(0)
+        
+        # Generar nombre de archivo
+        fecha_desde_str = resultado['fecha_desde'].strftime('%d%m%Y')
+        fecha_hasta_str = resultado['fecha_hasta'].strftime('%d%m%Y')
+        filename = f"Analisis_Tasas_{fecha_desde_str}_{fecha_hasta_str}.pdf"
+        
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
 
     # === Parsers ===
     def _parse_bool(value: str) -> bool:

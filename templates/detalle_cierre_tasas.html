@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}Detalle Cierre: {{ cierre.nombre_cierre }} — CPIM{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center mb-3">
+  <h3 class="me-auto">Detalle del Cierre: {{ cierre.nombre_cierre }}</h3>
+  <a href="{{ url_for('analisis_tasas') }}" class="btn btn-secondary">← Volver al Análisis</a>
+</div>
+
+<!-- Información del Cierre -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white">
+    <h5 class="card-title mb-0">📋 Información del Cierre</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <table class="table table-borderless">
+          <tr>
+            <th style="width: 150px;">Nombre:</th>
+            <td><strong>{{ cierre.nombre_cierre }}</strong></td>
+          </tr>
+          <tr>
+            <th>Período:</th>
+            <td>{{ cierre.fecha_desde.strftime('%d/%m/%Y') }} - {{ cierre.fecha_hasta.strftime('%d/%m/%Y') }}</td>
+          </tr>
+          <tr>
+            <th>Fecha de Cierre:</th>
+            <td>{{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+          </tr>
+          <tr>
+            <th>Usuario:</th>
+            <td>{{ cierre.usuario_cierre or 'Sistema' }}</td>
+          </tr>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <table class="table table-borderless">
+          <tr>
+            <th style="width: 150px;">Expedientes:</th>
+            <td><span class="badge bg-info">{{ expedientes|length }} expedientes</span></td>
+          </tr>
+          <tr>
+            <th>Total General:</th>
+            <td><strong class="text-success">{{ cierre.total_general|ars }}</strong></td>
+          </tr>
+          <tr>
+            <th>Para CPIM:</th>
+            <td>{{ cierre.total_cpim|ars }}</td>
+          </tr>
+          <tr>
+            <th>Para Ingenieros:</th>
+            <td>{{ (cierre.total_imlauer + cierre.total_onetto)|ars }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    
+    {% if cierre.observaciones %}
+    <div class="mt-3">
+      <strong>Observaciones:</strong>
+      <p class="text-muted">{{ cierre.observaciones }}</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Resumen de Honorarios -->
+<div class="card mb-4">
+  <div class="card-header bg-success text-white">
+    <h5 class="card-title mb-0">💰 Resumen de Honorarios</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-4">
+        <div class="card text-center border-primary">
+          <div class="card-body">
+            <h5 class="card-title text-primary">IMLAUER FERNANDO</h5>
+            <h3 class="text-success">{{ cierre.total_imlauer|ars }}</h3>
+            <small class="text-muted">Honorarios (70%)</small>
+            <br>
+            <small class="text-muted">Gas + Salubridad</small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card text-center border-primary">
+          <div class="card-body">
+            <h5 class="card-title text-primary">ONETTO JOSÉ</h5>
+            <h3 class="text-success">{{ cierre.total_onetto|ars }}</h3>
+            <small class="text-muted">Honorarios (70%)</small>
+            <br>
+            <small class="text-muted">Eléctrica + Electromecánica</small>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="card text-center border-warning">
+          <div class="card-body">
+            <h5 class="card-title text-warning">CPIM</h5>
+            <h3 class="text-primary">{{ cierre.total_cpim|ars }}</h3>
+            <small class="text-muted">Comisión (30%)</small>
+            <br>
+            <small class="text-muted">Total de todas las tasas</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Expedientes Incluidos -->
+<div class="card">
+  <div class="card-header bg-info text-white">
+    <h5 class="card-title mb-0">📄 Expedientes Incluidos en este Cierre ({{ expedientes|length }})</h5>
+  </div>
+  <div class="card-body">
+    {% if expedientes %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>N° CPIM</th>
+            <th>Fecha Pago</th>
+            <th>Profesional</th>
+            <th>Comitente</th>
+            <th>Gas</th>
+            <th>Salubridad</th>
+            <th>Eléctrica</th>
+            <th>Electromecánica</th>
+            <th>Total Visados</th>
+            <th>GOP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exp in expedientes %}
+          <tr>
+            <td>
+              <a href="{{ url_for('detalle_expediente', item_id=exp.id) }}" class="text-decoration-none">
+                {{ exp.nro_expediente_cpim or ('#' + exp.id|string) }}
+              </a>
+            </td>
+            <td>{{ exp.fecha_salida.strftime('%d/%m/%Y') if exp.fecha_salida else '-' }}</td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">
+              {{ exp.nombre_profesional or '-' }}
+            </td>
+            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">
+              {{ exp.nombre_comitente or '-' }}
+            </td>
+            <td>{{ exp.tasa_visado_gas_monto|ars if exp.tasa_visado_gas_monto else '-' }}</td>
+            <td>{{ exp.tasa_visado_salubridad_monto|ars if exp.tasa_visado_salubridad_monto else '-' }}</td>
+            <td>{{ exp.tasa_visado_electrica_monto|ars if exp.tasa_visado_electrica_monto else '-' }}</td>
+            <td>{{ exp.tasa_visado_electromecanica_monto|ars if exp.tasa_visado_electromecanica_monto else '-' }}</td>
+            <td><strong>{{ exp.total_visados|ars }}</strong></td>
+            <td>{{ exp.gop_numero or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary">
+          <tr>
+            <th colspan="4">TOTALES</th>
+            <th>{{ expedientes|sum(attribute='tasa_visado_gas_monto')|ars }}</th>
+            <th>{{ expedientes|sum(attribute='tasa_visado_salubridad_monto')|ars }}</th>
+            <th>{{ expedientes|sum(attribute='tasa_visado_electrica_monto')|ars }}</th>
+            <th>{{ expedientes|sum(attribute='tasa_visado_electromecanica_monto')|ars }}</th>
+            <th><strong>{{ cierre.total_general|ars }}</strong></th>
+            <th>-</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+      <strong>Sin expedientes:</strong> No se encontraron expedientes asociados a este cierre.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

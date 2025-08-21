@@ -253,23 +253,7 @@
            value="{{ (item.nro_caja if item else '') or '' }}">
   </div>
 
-  <div class="col-md-6">
-    <label class="form-label">Ruta carpeta</label>
-    <input type="text" name="ruta_carpeta" class="form-control"
-           value="{{ (item.ruta_carpeta if item else '') or '' }}">
-  </div>
-
-  <!-- WhatsApp -->
-  <div class="col-md-3">
-    <label class="form-label">WhatsApp profesional</label>
-    <input type="text" name="whatsapp_profesional" class="form-control"
-           value="{{ (item.whatsapp_profesional if item else '') or '' }}">
-  </div>
-  <div class="col-md-3">
-    <label class="form-label">WhatsApp tramitador</label>
-    <input type="text" name="whatsapp_tramitador" class="form-control"
-           value="{{ (item.whatsapp_tramitador if item else '') or '' }}">
-  </div>
+  
 
   <!-- ===== Bloque extra SOLO para Formato Digital ===== -->
   <div id="digital-extra" class="col-12" style="display:none;">
