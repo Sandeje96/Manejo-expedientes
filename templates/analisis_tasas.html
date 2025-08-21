@@ -282,31 +282,86 @@
 </div>
 {% endif %}
 
-<!-- Mensaje sobre cierres (temporalmente desactivado) -->
+<!-- Crear Cierre Oficial -->
+{% if resultado and resultado.expedientes_pagados %}
 <div class="card mb-4">
-  <div class="card-header bg-secondary text-white">
-    <h5 class="card-title mb-0">🔧 Funcionalidad de Cierres</h5>
+  <div class="card-header bg-success text-white">
+    <h5 class="card-title mb-0">💼 Crear Cierre Oficial</h5>
   </div>
   <div class="card-body">
-    <div class="alert alert-info">
-      <strong>En desarrollo:</strong> La funcionalidad de cierres oficiales estará disponible próximamente.
-      Por ahora puedes usar los análisis para calcular honorarios y exportar los resultados.
+    <div class="alert alert-warning">
+      <strong>⚠️ Importante:</strong> Al crear un cierre oficial, los {{ resultado.expedientes_pagados|length }} expedientes pagados 
+      de este período serán marcados como procesados y NO aparecerán en futuros análisis.
     </div>
+    
+    <form method="post" action="{{ url_for('cerrar_analisis_tasas') }}" class="row g-3">
+      <div class="col-md-8">
+        <label for="nombre_cierre" class="form-label">Nombre del Cierre</label>
+        <input type="text" class="form-control" id="nombre_cierre" name="nombre_cierre" 
+               value="Cierre {{ resultado.fecha_desde.strftime('%m/%Y') }}" required>
+        <div class="form-text">Ejemplo: "Cierre Agosto 2025" o "Liquidación Q3 2025"</div>
+      </div>
+      
+      <div class="col-md-4">
+        <label class="form-label">Total a Distribuir</label>
+        <div class="form-control-plaintext fw-bold text-success fs-5">
+          {{ resultado.resumen.total_general|ars }}
+        </div>
+      </div>
+      
+      <div class="col-12">
+        <label for="observaciones" class="form-label">Observaciones</label>
+        <textarea class="form-control" id="observaciones" name="observaciones" rows="3" 
+                  placeholder="Observaciones adicionales sobre este cierre (opcional)"></textarea>
+      </div>
+      
+      <!-- Resumen del cierre -->
+      <div class="col-12">
+        <div class="card bg-light">
+          <div class="card-body">
+            <h6>Resumen del Cierre:</h6>
+            <div class="row">
+              <div class="col-md-4">
+                <strong>Ing. Imlauer:</strong> {{ resultado.honorarios.imlauer.para_ingeniero|ars }}
+                <br><small class="text-muted">Gas + Salubridad</small>
+              </div>
+              <div class="col-md-4">
+                <strong>Ing. Onetto:</strong> {{ resultado.honorarios.onetto.para_ingeniero|ars }}
+                <br><small class="text-muted">Eléctrica + Electromecánica</small>
+              </div>
+              <div class="col-md-4">
+                <strong>CPIM:</strong> {{ resultado.honorarios.totales_generales.total_para_cpim|ars }}
+                <br><small class="text-muted">30% del total</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-12">
+        <button type="submit" class="btn btn-success btn-lg" 
+                onclick="return confirm('¿Confirmar creación del cierre? Esta acción NO se puede deshacer. Los expedientes serán marcados como procesados.')">
+          💼 Crear Cierre Oficial
+        </button>
+        <small class="text-muted ms-3">Esta acción es irreversible</small>
+      </div>
+    </form>
   </div>
 </div>
+{% endif %}
 
 {% endif %}
 
 <!-- Cierres Anteriores (si existieran) -->
-{% if cierres_anteriores %}
+{% if cierres_anteriores and cierres_anteriores|length > 0 %}
 <div class="card">
-  <div class="card-header">
+  <div class="card-header bg-secondary text-white">
     <h5 class="card-title mb-0">📚 Cierres Anteriores</h5>
   </div>
   <div class="card-body">
     <div class="table-responsive">
-      <table class="table table-sm">
-        <thead>
+      <table class="table table-sm table-hover">
+        <thead class="table-dark">
           <tr>
             <th>Nombre</th>
             <th>Período</th>
@@ -321,15 +376,29 @@
         <tbody>
           {% for cierre in cierres_anteriores %}
           <tr>
-            <td><strong>{{ cierre.nombre_cierre }}</strong></td>
-            <td>{{ cierre.fecha_desde.strftime('%d/%m/%Y') }} - {{ cierre.fecha_hasta.strftime('%d/%m/%Y') }}</td>
-            <td>{{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') }}</td>
-            <td>{{ cierre.total_imlauer|ars }}</td>
-            <td>{{ cierre.total_onetto|ars }}</td>
-            <td>{{ cierre.total_cpim|ars }}</td>
-            <td><strong>{{ cierre.total_general|ars }}</strong></td>
+            <td><strong>{{ cierre.nombre_cierre or cierre[1] }}</strong></td>
             <td>
-              <a href="{{ url_for('ver_cierre_tasas', cierre_id=cierre.id) }}" class="btn btn-sm btn-outline-primary">
+              {% if cierre.fecha_desde %}
+                {{ cierre.fecha_desde.strftime('%d/%m/%Y') if cierre.fecha_desde.strftime else cierre[2] }} - 
+                {{ cierre.fecha_hasta.strftime('%d/%m/%Y') if cierre.fecha_hasta.strftime else cierre[3] }}
+              {% else %}
+                {{ cierre[2] }} - {{ cierre[3] }}
+              {% endif %}
+            </td>
+            <td>
+              {% if cierre.fecha_cierre %}
+                {{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') if cierre.fecha_cierre.strftime else cierre[4] }}
+              {% else %}
+                {{ cierre[4] }}
+              {% endif %}
+            </td>
+            <td>{{ (cierre.total_imlauer or cierre[5])|ars }}</td>
+            <td>{{ (cierre.total_onetto or cierre[6])|ars }}</td>
+            <td>{{ (cierre.total_cpim or cierre[7])|ars }}</td>
+            <td><strong>{{ (cierre.total_general or cierre[8])|ars }}</strong></td>
+            <td>
+              <a href="{{ url_for('ver_cierre_tasas', cierre_id=(cierre.id or cierre[0])) }}" 
+                 class="btn btn-sm btn-outline-primary">
                 Ver Detalle
               </a>
             </td>
@@ -337,6 +406,19 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-header bg-light">
+    <h5 class="card-title mb-0 text-muted">📚 Cierres Anteriores</h5>
+  </div>
+  <div class="card-body">
+    <div class="text-center text-muted py-3">
+      <i class="bi bi-archive fs-1 mb-2"></i>
+      <p>No hay cierres registrados aún.</p>
+      <small>Una vez que crees tu primer cierre, aparecerá aquí.</small>
     </div>
   </div>
 </div>

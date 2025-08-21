@@ -153,7 +153,7 @@
             <td>{{ exp.tasa_visado_salubridad_monto|ars if exp.tasa_visado_salubridad_monto else '-' }}</td>
             <td>{{ exp.tasa_visado_electrica_monto|ars if exp.tasa_visado_electrica_monto else '-' }}</td>
             <td>{{ exp.tasa_visado_electromecanica_monto|ars if exp.tasa_visado_electromecanica_monto else '-' }}</td>
-            <td><strong>{{ exp.total_visados|ars }}</strong></td>
+            <td><strong>{{ exp.total_visados|ars if exp.total_visados else '$ 0,00' }}</strong></td>
             <td>{{ exp.gop_numero or '-' }}</td>
           </tr>
           {% endfor %}
@@ -161,10 +161,42 @@
         <tfoot class="table-secondary">
           <tr>
             <th colspan="4">TOTALES</th>
-            <th>{{ expedientes|sum(attribute='tasa_visado_gas_monto')|ars }}</th>
-            <th>{{ expedientes|sum(attribute='tasa_visado_salubridad_monto')|ars }}</th>
-            <th>{{ expedientes|sum(attribute='tasa_visado_electrica_monto')|ars }}</th>
-            <th>{{ expedientes|sum(attribute='tasa_visado_electromecanica_monto')|ars }}</th>
+            <th>
+              {% set total_gas = 0 %}
+              {% for exp in expedientes %}
+                {% if exp.tasa_visado_gas_monto %}
+                  {% set total_gas = total_gas + exp.tasa_visado_gas_monto %}
+                {% endif %}
+              {% endfor %}
+              {{ total_gas|ars }}
+            </th>
+            <th>
+              {% set total_salubridad = 0 %}
+              {% for exp in expedientes %}
+                {% if exp.tasa_visado_salubridad_monto %}
+                  {% set total_salubridad = total_salubridad + exp.tasa_visado_salubridad_monto %}
+                {% endif %}
+              {% endfor %}
+              {{ total_salubridad|ars }}
+            </th>
+            <th>
+              {% set total_electrica = 0 %}
+              {% for exp in expedientes %}
+                {% if exp.tasa_visado_electrica_monto %}
+                  {% set total_electrica = total_electrica + exp.tasa_visado_electrica_monto %}
+                {% endif %}
+              {% endfor %}
+              {{ total_electrica|ars }}
+            </th>
+            <th>
+              {% set total_electromecanica = 0 %}
+              {% for exp in expedientes %}
+                {% if exp.tasa_visado_electromecanica_monto %}
+                  {% set total_electromecanica = total_electromecanica + exp.tasa_visado_electromecanica_monto %}
+                {% endif %}
+              {% endfor %}
+              {{ total_electromecanica|ars }}
+            </th>
             <th><strong>{{ cierre.total_general|ars }}</strong></th>
             <th>-</th>
           </tr>

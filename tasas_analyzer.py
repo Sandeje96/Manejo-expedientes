@@ -318,12 +318,121 @@ class TasasAnalyzer:
     
     def crear_cierre(self, analisis_datos, nombre_cierre, usuario_cierre=None, observaciones=None):
         """
-        MÉTODO TEMPORAL: Esta funcionalidad estará disponible próximamente.
+        Crea un cierre oficial marcando expedientes como procesados.
+        
+        Args:
+            analisis_datos: Datos del análisis con expedientes y cálculos
+            nombre_cierre: Nombre descriptivo del cierre
+            usuario_cierre: Usuario que ejecuta el cierre
+            observaciones: Observaciones adicionales
+            
+        Returns:
+            CierreTasas: El objeto cierre creado
         """
-        raise NotImplementedError("La funcionalidad de cierres estará disponible próximamente")
+        from datetime import datetime
+        import json
+        
+        # Validar que hay expedientes para cerrar
+        expedientes_pagados = analisis_datos.get('expedientes_pagados', [])
+        if not expedientes_pagados:
+            raise ValueError("No hay expedientes pagados para incluir en el cierre")
+        
+        # Calcular totales desde los datos del análisis
+        honorarios = analisis_datos.get('honorarios', {})
+        
+        total_imlauer = honorarios.get('imlauer', {}).get('para_ingeniero', Decimal('0'))
+        total_onetto = honorarios.get('onetto', {}).get('para_ingeniero', Decimal('0'))
+        total_cpim = honorarios.get('totales_generales', {}).get('total_para_cpim', Decimal('0'))
+        total_general = honorarios.get('totales_generales', {}).get('total_todas_tasas', Decimal('0'))
+        
+        # Crear lista de IDs de expedientes para incluir
+        expedientes_ids = [exp['id'] for exp in expedientes_pagados]
+        
+        # Crear el registro del cierre
+        from sqlalchemy import text
+        
+        # Importar el modelo desde el contexto actual
+        with current_app.app_context():
+            # Buscar el modelo CierreTasas
+            db = current_app.extensions['sqlalchemy']
+            CierreTasas = None
+            
+            for table_name, model_class in db.Model.registry._class_registry.items():
+                if hasattr(model_class, '__tablename__') and model_class.__tablename__ == 'cierres_tasas':
+                    CierreTasas = model_class
+                    break
+            
+            if not CierreTasas:
+                raise RuntimeError("No se encontró el modelo CierreTasas")
+        
+        cierre = CierreTasas(
+            nombre_cierre=nombre_cierre,
+            fecha_desde=analisis_datos['fecha_desde'],
+            fecha_hasta=analisis_datos['fecha_hasta'],
+            fecha_cierre=datetime.utcnow(),
+            usuario_cierre=usuario_cierre or "Sistema",
+            total_imlauer=total_imlauer,
+            total_onetto=total_onetto,
+            total_cpim=total_cpim,
+            total_general=total_general,
+            expedientes_incluidos=json.dumps(expedientes_ids),
+            observaciones=observaciones
+        )
+        
+        # Guardar el cierre
+        self.db.add(cierre)
+        self.db.flush()  # Para obtener el ID
+        
+        # Marcar expedientes como incluidos en el cierre
+        if expedientes_ids:
+            self.db.execute(
+                text("""
+                    UPDATE expedientes 
+                    SET incluido_en_cierre_id = :cierre_id,
+                        fecha_inclusion_cierre = :fecha_inclusion
+                    WHERE id = ANY(:expedientes_ids)
+                """),
+                {
+                    "cierre_id": cierre.id,
+                    "fecha_inclusion": datetime.utcnow(),
+                    "expedientes_ids": expedientes_ids
+                }
+            )
+        
+        # Confirmar transacción
+        self.db.commit()
+        
+        current_app.logger.info(f"Cierre creado: {nombre_cierre} con {len(expedientes_ids)} expedientes")
+        
+        return cierre
     
     def obtener_cierres_anteriores(self, limite=10):
         """
-        MÉTODO TEMPORAL: Retorna lista vacía hasta que se implemente completamente.
+        Obtiene los cierres anteriores ordenados por fecha.
+        
+        Args:
+            limite: Número máximo de cierres a retornar
+            
+        Returns:
+            list: Lista de objetos CierreTasas
         """
-        return []
+        try:
+            from sqlalchemy import text
+            
+            # Usar SQL directo para obtener cierres
+            result = self.db.execute(
+                text("""
+                    SELECT id, nombre_cierre, fecha_desde, fecha_hasta, fecha_cierre,
+                        total_imlauer, total_onetto, total_cpim, total_general
+                    FROM cierres_tasas 
+                    ORDER BY fecha_cierre DESC 
+                    LIMIT :limite
+                """),
+                {"limite": limite}
+            ).fetchall()
+            
+            return result
+            
+        except Exception as e:
+            current_app.logger.warning(f"Error obteniendo cierres anteriores: {e}")
+            return []

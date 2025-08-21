@@ -927,7 +927,7 @@ def create_app():
             
             # Verificar que hay expedientes pagados para cerrar
             resultado = ultimo_analisis['resultado']
-            if not resultado['expedientes_pagados']:
+            if not resultado.get('expedientes_pagados'):
                 flash('No hay expedientes pagados en este período para cerrar', 'warning')
                 return redirect(url_for('analisis_tasas'))
             
@@ -943,11 +943,13 @@ def create_app():
             # Limpiar sesión
             session.pop('ultimo_analisis', None)
             
-            flash(f'Cierre "{nombre_cierre}" creado exitosamente. {len(resultado["expedientes_pagados"])} expedientes procesados.', 'success')
-            return redirect(url_for('analisis_tasas'))
-        
+            flash(f'✅ Cierre "{nombre_cierre}" creado exitosamente. {len(resultado["expedientes_pagados"])} expedientes procesados y marcados como cerrados.', 'success')
+            return redirect(url_for('ver_cierre_tasas', cierre_id=cierre.id))
+            
         except Exception as e:
             current_app.logger.error(f"Error creando cierre: {e}")
+            import traceback
+            current_app.logger.error(f"Traceback: {traceback.format_exc()}")
             flash(f"Error creando cierre: {e}", 'danger')
             return redirect(url_for('analisis_tasas'))
     
