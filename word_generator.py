@@ -89,6 +89,48 @@ def generar_documento_visado(expediente, plantilla_path=None):
     
     return doc_stream
 
+def generar_documento_adicional(expediente, plantilla_path=None):
+    """
+    Genera un documento Word adicional usando la plantilla adicional y reemplazando etiquetas.
+    
+    Args:
+        expediente: Objeto Expediente con todos los datos
+        plantilla_path: Ruta a la plantilla Word adicional (opcional)
+        
+    Returns:
+        BytesIO: Stream del documento Word generado
+    """
+    
+    # Ruta por defecto de la plantilla adicional
+    if plantilla_path is None:
+        plantilla_path = os.path.join(os.path.dirname(__file__), 'templates', 'plantilla_expediente_adicional.docx')
+    
+    # Verificar que existe la plantilla
+    if not os.path.exists(plantilla_path):
+        raise FileNotFoundError(f"No se encontró la plantilla adicional en: {plantilla_path}")
+    
+    # Abrir la plantilla
+    doc = Document(plantilla_path)
+    
+    # Crear diccionario con todos los datos del expediente (reutilizamos la función existente)
+    datos_reemplazo = _crear_diccionario_datos(expediente)
+    
+    # Reemplazar etiquetas en párrafos
+    _reemplazar_en_paragrafos(doc, datos_reemplazo)
+    
+    # Reemplazar etiquetas en tablas
+    _reemplazar_en_tablas(doc, datos_reemplazo)
+    
+    # Reemplazar etiquetas en encabezados y pies de página
+    _reemplazar_en_headers_footers(doc, datos_reemplazo)
+    
+    # Guardar en memoria
+    doc_stream = io.BytesIO()
+    doc.save(doc_stream)
+    doc_stream.seek(0)
+    
+    return doc_stream
+
 
 def _crear_diccionario_datos(expediente):
     """
@@ -208,6 +250,30 @@ def _crear_diccionario_datos(expediente):
         '<#bandeja_profesional_nombre>': expediente.bandeja_profesional_nombre or '-' if expediente.formato == 'Digital' else 'No aplica',
         '<#bandeja_profesional_usuario>': expediente.bandeja_profesional_usuario or '-' if expediente.formato == 'Digital' else 'No aplica',
         '<#bandeja_profesional_fecha>': formatear_fecha(expediente.bandeja_profesional_fecha) if expediente.formato == 'Digital' else 'No aplica',
+        # === PROFESIONALES MÚLTIPLES ===
+        '<#todos_profesionales>': '\n'.join([prof['nombre'] for prof in expediente.todos_los_profesionales]) if expediente.todos_los_profesionales else '-',
+        '<#profesional_principal>': expediente.nombre_profesional or '-',
+        '<#whatsapp_principal>': expediente.whatsapp_profesional or '-',
+        
+        # Profesionales adicionales (hasta 5 para cubrir casos comunes)
+        '<#profesional_adicional_1>': expediente.profesionales_adicionales[0].nombre_profesional if len(expediente.profesionales_adicionales) > 0 else '-',
+        '<#whatsapp_adicional_1>': expediente.profesionales_adicionales[0].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 0 else '-',
+        
+        '<#profesional_adicional_2>': expediente.profesionales_adicionales[1].nombre_profesional if len(expediente.profesionales_adicionales) > 1 else '-',
+        '<#whatsapp_adicional_2>': expediente.profesionales_adicionales[1].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 1 else '-',
+        
+        '<#profesional_adicional_3>': expediente.profesionales_adicionales[2].nombre_profesional if len(expediente.profesionales_adicionales) > 2 else '-',
+        '<#whatsapp_adicional_3>': expediente.profesionales_adicionales[2].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 2 else '-',
+        
+        '<#profesional_adicional_4>': expediente.profesionales_adicionales[3].nombre_profesional if len(expediente.profesionales_adicionales) > 3 else '-',
+        '<#whatsapp_adicional_4>': expediente.profesionales_adicionales[3].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 3 else '-',
+        
+        '<#profesional_adicional_5>': expediente.profesionales_adicionales[4].nombre_profesional if len(expediente.profesionales_adicionales) > 4 else '-',
+        '<#whatsapp_adicional_5>': expediente.profesionales_adicionales[4].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 4 else '-',
+        
+        # Contadores útiles
+        '<#cantidad_profesionales>': str(len(expediente.todos_los_profesionales)),
+        '<#cantidad_profesionales_adicionales>': str(len(expediente.profesionales_adicionales)),
     }
     
     return datos

@@ -23,6 +23,12 @@
         📋 Generar Visado
       </button>
     </form>
+
+    <form method="post" action="{{ url_for('generar_adicional_expediente', item_id=item.id) }}" class="d-inline">
+      <button type="submit" class="btn btn-info" title="Generar documento Adicional">
+        📑 Generar Adicional
+      </button>
+    </form>
     
     <a class="btn btn-outline-primary" href="{{ url_for('editar_expediente', item_id=item.id) }}">Editar</a>
   </div>
