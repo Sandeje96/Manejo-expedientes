@@ -47,6 +47,48 @@ def generar_documento_expediente(expediente, plantilla_path=None):
     
     return doc_stream
 
+def generar_documento_visado(expediente, plantilla_path=None):
+    """
+    Genera un documento Word de visado usando la plantilla de visado y reemplazando etiquetas.
+    
+    Args:
+        expediente: Objeto Expediente con todos los datos
+        plantilla_path: Ruta a la plantilla Word de visado (opcional)
+        
+    Returns:
+        BytesIO: Stream del documento Word generado
+    """
+    
+    # Ruta por defecto de la plantilla de visado
+    if plantilla_path is None:
+        plantilla_path = os.path.join(os.path.dirname(__file__), 'templates', 'plantilla_visado.docx')
+    
+    # Verificar que existe la plantilla
+    if not os.path.exists(plantilla_path):
+        raise FileNotFoundError(f"No se encontró la plantilla de visado en: {plantilla_path}")
+    
+    # Abrir la plantilla
+    doc = Document(plantilla_path)
+    
+    # Crear diccionario con todos los datos del expediente (reutilizamos la función existente)
+    datos_reemplazo = _crear_diccionario_datos(expediente)
+    
+    # Reemplazar etiquetas en párrafos
+    _reemplazar_en_paragrafos(doc, datos_reemplazo)
+    
+    # Reemplazar etiquetas en tablas
+    _reemplazar_en_tablas(doc, datos_reemplazo)
+    
+    # Reemplazar etiquetas en encabezados y pies de página
+    _reemplazar_en_headers_footers(doc, datos_reemplazo)
+    
+    # Guardar en memoria
+    doc_stream = io.BytesIO()
+    doc.save(doc_stream)
+    doc_stream.seek(0)
+    
+    return doc_stream
+
 
 def _crear_diccionario_datos(expediente):
     """

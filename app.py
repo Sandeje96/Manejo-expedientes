@@ -656,6 +656,35 @@ def create_app():
             current_app.logger.error(f"Error generando documento Word para expediente {item_id}: {e}")
             flash(f"Error generando documento Word: {e}", "danger")
             return redirect(url_for('detalle_expediente', item_id=item_id))
+        
+    @app.post("/expedientes/<int:item_id>/generar-visado")
+    def generar_visado_expediente(item_id: int):
+        """Genera y descarga un documento Word de visado con los datos del expediente."""
+        from word_generator import generar_documento_visado
+        from flask import send_file
+        
+        try:
+            # Obtener el expediente
+            item = Expediente.query.get_or_404(item_id)
+            
+            # Generar el documento Word de visado
+            doc_stream = generar_documento_visado(item)
+            
+            # Crear nombre del archivo
+            nombre_archivo = f"Visado_CPIM_{item.nro_expediente_cpim or item.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            
+            # Retornar el archivo para descarga
+            return send_file(
+                doc_stream,
+                as_attachment=True,
+                download_name=nombre_archivo,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+            
+        except Exception as e:
+            current_app.logger.error(f"Error generando documento de visado para expediente {item_id}: {e}")
+            flash(f"Error generando documento de visado: {e}", "danger")
+            return redirect(url_for('detalle_expediente', item_id=item_id))
 
     # === Parsers ===
     def _parse_bool(value: str) -> bool:
