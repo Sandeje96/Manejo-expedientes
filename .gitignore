@@ -1,2 +1,17 @@
-cpim-expedientes-*.json
+# Credenciales sensibles
+gcs-credentials.json
+*.json
 .env
+
+# Archivos Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Uploads
+uploads/
+
+# IDE
+.vscode/
+.idea/
