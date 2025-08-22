@@ -204,6 +204,7 @@
         <thead class="table-dark">
           <tr>
             <th>Fecha</th>
+            <th>GOP</th>
             <th>Profesional</th>
             <th>Comitente</th>
             <th>Gas</th>
@@ -211,25 +212,90 @@
             <th>Eléctrica</th>
             <th>Electromecánica</th>
             <th>Total Visados</th>
-            <th>N° CPIM</th>
-            <th>GOP</th>
-          </tr>
+            <th>Estado Expediente</th>
+            <th>Bandeja Actual</th>
+        </tr>
         </thead>
         <tbody>
           {% for exp in resultado.expedientes_pagados %}
-          <tr>
-            <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
-            <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
-            <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
-            <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
-            <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
-            <td><strong>{{ exp.total_visados|ars }}</strong></td>
-            <td>{{ exp.nro_expediente_cpim or '-' }}</td>
-            <td>{{ exp.gop_numero or '-' }}</td>
-          </tr>
-          {% endfor %}
+            <tr>
+                <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
+                <td>{{ exp.gop_numero or '-' }}</td>
+                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
+                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
+                <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
+                <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
+                <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
+                <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
+                <td><strong>{{ exp.total_visados|ars }}</strong></td>
+                
+                <!-- NUEVA COLUMNA: Estado del Expediente -->
+                <td>
+                {% if exp.finalizado %}
+                    <span class="badge bg-success">✅ Finalizado</span>
+                    {% if exp.fecha_finalizado %}
+                    <br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
+                    {% endif %}
+                {% else %}
+                    <span class="badge bg-warning text-dark">⏳ En proceso</span>
+                {% endif %}
+                </td>
+                
+                <!-- NUEVA COLUMNA: Bandeja Actual -->
+                <td style="max-width: 200px;">
+                {% set bandejas_info = exp.bandejas_info %}
+                {% if not bandejas_info.aplica_gop %}
+                    <small class="text-muted">{{ bandejas_info.mensaje }}</small>
+                {% elif not bandejas_info.tiene_datos_bandeja %}
+                    <small class="text-warning">Sin datos de bandeja</small>
+                    {% if bandejas_info.gop_info.numero %}
+                    <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
+                    {% endif %}
+                {% else %}
+                    <!-- Mostrar todos los usuarios que tienen el expediente -->
+                    {% set usuarios_activos = [] %}
+                    {% for tipo, info in bandejas_info.bandejas.items() %}
+                    {% if info.nombre and info.usuario %}
+                        {% set _ = usuarios_activos.append({
+                        'tipo': tipo,
+                        'usuario': info.usuario,
+                        'fecha': info.fecha,
+                        'dias': info.dias
+                        }) %}
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if usuarios_activos %}
+                    {% for usuario_info in usuarios_activos %}
+                        <div class="mb-1">
+                        <!-- Badge de color según el tipo de bandeja -->
+                        {% if usuario_info.tipo == 'cpim' %}
+                            <span class="badge bg-primary me-1">C</span>
+                        {% elif usuario_info.tipo == 'imlauer' %}
+                            <span class="badge bg-warning text-dark me-1">I</span>
+                        {% elif usuario_info.tipo == 'onetto' %}
+                            <span class="badge bg-secondary me-1">O</span>
+                        {% else %}
+                            <span class="badge bg-success me-1">P</span>
+                        {% endif %}
+                        
+                        <!-- Nombre del usuario -->
+                        <span class="fw-bold">{{ usuario_info.usuario }}</span>
+                        
+                        <!-- Días en esa bandeja -->
+                        {% if usuario_info.dias > 0 %}
+                            <span class="badge bg-light text-dark ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
+                        {% endif %}
+                        </div>
+                    {% endfor %}
+                    {% else %}
+                    <small class="text-muted">Sin asignación</small>
+                    {% endif %}
+                {% endif %}
+                </td>
+                
+            </tr>
+            {% endfor %}
         </tbody>
       </table>
     </div>
@@ -249,6 +315,7 @@
         <thead class="table-warning">
           <tr>
             <th>Fecha</th>
+            <th>GOP</th>
             <th>Profesional</th>
             <th>Comitente</th>
             <th>Gas</th>
@@ -256,14 +323,15 @@
             <th>Eléctrica</th>
             <th>Electromecánica</th>
             <th>Total Visados</th>
-            <th>N° CPIM</th>
-            <th>GOP</th>
+            <th>Estado Expediente</th>
+            <th>Bandeja Actual</th>
           </tr>
         </thead>
         <tbody>
           {% for exp in resultado.expedientes_no_pagados %}
           <tr>
             <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
+            <td>{{ exp.gop_numero or '-' }}</td>
             <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
             <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
             <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
@@ -271,8 +339,72 @@
             <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
             <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
             <td><strong>{{ exp.total_visados|ars }}</strong></td>
-            <td>{{ exp.nro_expediente_cpim or '-' }}</td>
-            <td>{{ exp.gop_numero or '-' }}</td>
+            
+            <!-- NUEVA COLUMNA: Estado del Expediente -->
+            <td>
+            {% if exp.finalizado %}
+                <span class="badge bg-success">✅ Finalizado</span>
+                {% if exp.fecha_finalizado %}
+                <br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
+                {% endif %}
+            {% else %}
+                <span class="badge bg-warning text-dark">⏳ En proceso</span>
+            {% endif %}
+            </td>
+            
+            <!-- NUEVA COLUMNA: Bandeja Actual -->
+            <td style="max-width: 200px;">
+            {% set bandejas_info = exp.bandejas_info %}
+            {% if not bandejas_info.aplica_gop %}
+                <small class="text-muted">{{ bandejas_info.mensaje }}</small>
+            {% elif not bandejas_info.tiene_datos_bandeja %}
+                <small class="text-warning">Sin datos de bandeja</small>
+                {% if bandejas_info.gop_info.numero %}
+                <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
+                {% endif %}
+            {% else %}
+                <!-- Mostrar todos los usuarios que tienen el expediente -->
+                {% set usuarios_activos = [] %}
+                {% for tipo, info in bandejas_info.bandejas.items() %}
+                {% if info.nombre and info.usuario %}
+                    {% set _ = usuarios_activos.append({
+                    'tipo': tipo,
+                    'usuario': info.usuario,
+                    'fecha': info.fecha,
+                    'dias': info.dias
+                    }) %}
+                {% endif %}
+                {% endfor %}
+                
+                {% if usuarios_activos %}
+                {% for usuario_info in usuarios_activos %}
+                    <div class="mb-1">
+                    <!-- Badge de color según el tipo de bandeja -->
+                    {% if usuario_info.tipo == 'cpim' %}
+                        <span class="badge bg-primary me-1">C</span>
+                    {% elif usuario_info.tipo == 'imlauer' %}
+                        <span class="badge bg-warning text-dark me-1">I</span>
+                    {% elif usuario_info.tipo == 'onetto' %}
+                        <span class="badge bg-secondary me-1">O</span>
+                    {% else %}
+                        <span class="badge bg-success me-1">P</span>
+                    {% endif %}
+                    
+                    <!-- Nombre del usuario -->
+                    <span class="fw-bold">{{ usuario_info.usuario }}</span>
+                    
+                    <!-- Días en esa bandeja -->
+                    {% if usuario_info.dias > 0 %}
+                        <span class="badge bg-light text-dark ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
+                    {% endif %}
+                    </div>
+                {% endfor %}
+                {% else %}
+                <small class="text-muted">Sin asignación</small>
+                {% endif %}
+            {% endif %}
+            </td>
+            
           </tr>
           {% endfor %}
         </tbody>

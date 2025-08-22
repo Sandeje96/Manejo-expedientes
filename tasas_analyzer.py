@@ -286,6 +286,9 @@ class TasasAnalyzer:
                     total_visados += exp.tasa_visado_electromecanica_monto
                     visados_detalle['electromecanica'] = exp.tasa_visado_electromecanica_monto
             
+            # NUEVO: Obtener información de bandejas y estado
+            info_bandejas = self._obtener_info_bandejas_expediente(exp)
+            
             datos.append({
                 'id': exp.id,
                 'fecha': exp.fecha_salida if hasattr(exp, 'fecha_salida') else exp.fecha,
@@ -298,7 +301,12 @@ class TasasAnalyzer:
                 'electrica': visados_detalle.get('electrica', Decimal('0')),
                 'electromecanica': visados_detalle.get('electromecanica', Decimal('0')),
                 'total_visados': total_visados,
-                'estado_pago': 'Pagado' if es_pagado else 'No pagado'
+                'estado_pago': 'Pagado' if es_pagado else 'No pagado',
+                # NUEVO: Información de bandejas y estado
+                'formato': getattr(exp, 'formato', 'Papel'),
+                'finalizado': getattr(exp, 'finalizado', False),
+                'fecha_finalizado': getattr(exp, 'fecha_finalizado', None),
+                'bandejas_info': info_bandejas
             })
         
         return datos
@@ -405,6 +413,83 @@ class TasasAnalyzer:
         current_app.logger.info(f"Cierre creado: {nombre_cierre} con {len(expedientes_ids)} expedientes")
         
         return cierre
+    
+    def _obtener_info_bandejas_expediente(self, exp):
+        """
+        Obtiene información completa de bandejas para un expediente específico.
+        
+        Returns:
+            dict: Información de bandejas, días totales, y estado actual
+        """
+        # Si es formato Papel, no tiene bandejas GOP
+        if getattr(exp, 'formato', 'Papel') == 'Papel':
+            return {
+                'aplica_gop': False,
+                'mensaje': 'Expediente en formato papel'
+            }
+        
+        # Para expedientes digitales, obtener información de bandejas
+        bandejas = {
+            'cpim': {
+                'nombre': getattr(exp, 'bandeja_cpim_nombre', None),
+                'usuario': getattr(exp, 'bandeja_cpim_usuario', None),
+                'fecha': getattr(exp, 'bandeja_cpim_fecha', None),
+                'dias': 0
+            },
+            'imlauer': {
+                'nombre': getattr(exp, 'bandeja_imlauer_nombre', None),
+                'usuario': getattr(exp, 'bandeja_imlauer_usuario', None),
+                'fecha': getattr(exp, 'bandeja_imlauer_fecha', None),
+                'dias': 0
+            },
+            'onetto': {
+                'nombre': getattr(exp, 'bandeja_onetto_nombre', None),
+                'usuario': getattr(exp, 'bandeja_onetto_usuario', None),
+                'fecha': getattr(exp, 'bandeja_onetto_fecha', None),
+                'dias': 0
+            },
+            'profesional': {
+                'nombre': getattr(exp, 'bandeja_profesional_nombre', None),
+                'usuario': getattr(exp, 'bandeja_profesional_usuario', None),
+                'fecha': getattr(exp, 'bandeja_profesional_fecha', None),
+                'dias': 0
+            }
+        }
+        
+        # Calcular días por bandeja y total
+        from datetime import date
+        total_dias_sistema = 0
+        bandeja_actual = None
+        
+        for bandeja_tipo, info in bandejas.items():
+            if info['fecha']:
+                # Calcular días desde que está en esta bandeja
+                dias = (date.today() - info['fecha']).days
+                info['dias'] = dias
+                total_dias_sistema += dias
+                
+                # Determinar si es la bandeja actual (la más reciente)
+                if info['nombre']:
+                    if not bandeja_actual or info['fecha'] > bandejas[bandeja_actual]['fecha']:
+                        bandeja_actual = bandeja_tipo
+        
+        # Información de GOP general
+        gop_info = {
+            'numero': getattr(exp, 'gop_numero', None),
+            'estado': getattr(exp, 'gop_estado', None),
+            'bandeja_general': getattr(exp, 'gop_bandeja_actual', None),
+            'usuario_general': getattr(exp, 'gop_usuario_asignado', None),
+            'ultima_sync': getattr(exp, 'gop_ultima_sincronizacion', None)
+        }
+        
+        return {
+            'aplica_gop': True,
+            'bandejas': bandejas,
+            'bandeja_actual': bandeja_actual,
+            'total_dias_sistema': total_dias_sistema,
+            'gop_info': gop_info,
+            'tiene_datos_bandeja': any(info['nombre'] for info in bandejas.values())
+        }
     
     def obtener_cierres_anteriores(self, limite=10):
         """
