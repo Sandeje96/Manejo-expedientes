@@ -1447,16 +1447,34 @@ def create_app():
     def _get_gcs_client():
         """
         Obtiene un cliente de GCS.
-        - Si GCS_CREDENTIALS_JSON está definido (contenido JSON), lo usa.
-        - Si no, usa GOOGLE_APPLICATION_CREDENTIALS (ruta) o credenciales por defecto.
+        Busca credenciales en este orden:
+        1. GCS_CREDENTIALS_JSON (contenido JSON en .env)
+        2. GOOGLE_APPLICATION_CREDENTIALS (ruta en .env)
+        3. Archivo local gcs-credentials.json
+        4. Credenciales por defecto del sistema
         """
-        from google.cloud import storage  # import local
+        from google.cloud import storage
+        
+        # Opción 1: JSON directo en variable de entorno
         creds_json = os.getenv("GCS_CREDENTIALS_JSON")
         if creds_json:
             from google.oauth2 import service_account
             info = json.loads(creds_json)
             creds = service_account.Credentials.from_service_account_info(info)
             return storage.Client(credentials=creds)
+        
+        # Opción 2: Ruta específica en variable de entorno
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_path and os.path.exists(creds_path):
+            return storage.Client()
+        
+        # Opción 3: Buscar archivo local en la carpeta del proyecto
+        local_creds = os.path.join(os.path.dirname(__file__), "gcs-credentials.json")
+        if os.path.exists(local_creds):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
+            return storage.Client()
+        
+        # Opción 4: Credenciales por defecto
         return storage.Client()
 
     def _upload_pdf_to_gcs(file_storage, dest_prefix: str):
