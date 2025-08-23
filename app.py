@@ -1550,5 +1550,69 @@ def create_app():
                 ))
                 count += 1
         return count
+    
+    # === API ENDPOINTS PARA AUTOCOMPLETADO ===
+    @app.get("/api/profesionales")
+    def api_profesionales():
+        """Devuelve lista única de profesionales para autocompletado."""
+        from flask import jsonify
+        
+        try:
+            # Obtener profesionales únicos del campo principal
+            profesionales_principales = _db.session.execute(
+                _db.text("""
+                    SELECT DISTINCT nombre_profesional 
+                    FROM expedientes 
+                    WHERE nombre_profesional IS NOT NULL 
+                    AND nombre_profesional != '' 
+                    ORDER BY nombre_profesional
+                """)
+            ).fetchall()
+            
+            # Obtener profesionales adicionales
+            profesionales_adicionales = _db.session.execute(
+                _db.text("""
+                    SELECT DISTINCT nombre_profesional 
+                    FROM profesionales_adicionales 
+                    WHERE nombre_profesional IS NOT NULL 
+                    AND nombre_profesional != '' 
+                    ORDER BY nombre_profesional
+                """)
+            ).fetchall()
+            
+            # Combinar y eliminar duplicados
+            todos_profesionales = set()
+            for prof in profesionales_principales:
+                todos_profesionales.add(prof[0])
+            for prof in profesionales_adicionales:
+                todos_profesionales.add(prof[0])
+            
+            return jsonify(sorted(list(todos_profesionales)))
+            
+        except Exception as e:
+            current_app.logger.error(f"Error obteniendo profesionales: {e}")
+            return jsonify([])
+
+    @app.get("/api/comitentes")
+    def api_comitentes():
+        """Devuelve lista única de comitentes para autocompletado."""
+        from flask import jsonify
+        
+        try:
+            comitentes = _db.session.execute(
+                _db.text("""
+                    SELECT DISTINCT nombre_comitente 
+                    FROM expedientes 
+                    WHERE nombre_comitente IS NOT NULL 
+                    AND nombre_comitente != '' 
+                    ORDER BY nombre_comitente
+                """)
+            ).fetchall()
+            
+            return jsonify([comitente[0] for comitente in comitentes])
+            
+        except Exception as e:
+            current_app.logger.error(f"Error obteniendo comitentes: {e}")
+            return jsonify([])
 
     return app

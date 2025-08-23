@@ -62,8 +62,18 @@
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label">Nombre del profesional</label>
-            <input type="text" name="nombre_profesional" class="form-control" required
-                   value="{{ (item.nombre_profesional if item else '') or '' }}">
+            <div class="position-relative">
+              <input 
+                type="text" 
+                name="nombre_profesional" 
+                id="nombre_profesional"
+                class="form-control autocomplete-input" 
+                required
+                autocomplete="off"
+                placeholder="Escribí el nombre..."
+                value="{{ (item.nombre_profesional if item else '') or '' }}">
+              <div id="profesional_suggestions" class="autocomplete-suggestions"></div>
+            </div>
           </div>
           
           <div class="col-md-4">
@@ -102,9 +112,16 @@
             {% for prof_adic in item.profesionales_adicionales %}
             <div class="row g-2 mb-2 profesional-adicional-item">
               <div class="col-md-6">
-                <input type="text" name="profesionales_adicionales_nombre[]" 
-                       class="form-control" placeholder="Nombre del profesional" 
-                       value="{{ prof_adic.nombre_profesional }}">
+                <div class="position-relative">
+                  <input 
+                    type="text" 
+                    name="profesionales_adicionales_nombre[]" 
+                    class="form-control autocomplete-input" 
+                    placeholder="Nombre del profesional"
+                    autocomplete="off"
+                    value="{{ prof_adic.nombre_profesional }}">
+                  <div class="autocomplete-suggestions"></div>
+                </div>
               </div>
               <div class="col-md-4">
                 <select name="profesionales_adicionales_profesion[]" class="form-select">
@@ -131,45 +148,20 @@
     </div>
   </div>
 
-  <!-- JavaScript para manejar profesionales adicionales -->
-  <script>
-  function agregarProfesional() {
-    const container = document.getElementById('profesionales-adicionales');
-    const div = document.createElement('div');
-    div.className = 'row g-2 mb-2 profesional-adicional-item';
-    div.innerHTML = `
-      <div class="col-md-6">
-        <input type="text" name="profesionales_adicionales_nombre[]" 
-               class="form-control" placeholder="Nombre del profesional">
-      </div>
-      <div class="col-md-4">
-        <select name="profesionales_adicionales_profesion[]" class="form-select">
-          <option value="">Seleccionar profesión</option>
-          {% for p in profesiones %}
-          <option value="{{ p }}">{{ p }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-2">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
-          Eliminar
-        </button>
-      </div>
-    `;
-    container.appendChild(div);
-  }
-
-  function eliminarProfesional(button) {
-    const item = button.closest('.profesional-adicional-item');
-    item.remove();
-  }
-  </script>
-
   <!-- Comitente -->
   <div class="col-md-6">
     <label class="form-label">Nombre comitente</label>
-    <input type="text" name="nombre_comitente" class="form-control"
-           value="{{ (item.nombre_comitente if item else '') or '' }}">
+    <div class="position-relative">
+      <input 
+        type="text" 
+        name="nombre_comitente" 
+        id="nombre_comitente"
+        class="form-control autocomplete-input"
+        autocomplete="off"
+        placeholder="Escribí el nombre del comitente..."
+        value="{{ (item.nombre_comitente if item else '') or '' }}">
+      <div id="comitente_suggestions" class="autocomplete-suggestions"></div>
+    </div>
   </div>
 
   <!-- Ubicación -->
@@ -329,14 +321,299 @@
   </div>
 </form>
 
+<!-- CSS para el autocompletado -->
+<style>
+.autocomplete-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.autocomplete-suggestion {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.autocomplete-suggestion:hover {
+  background-color: #f8f9fa;
+}
+
+.autocomplete-suggestion.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.autocomplete-suggestion:last-child {
+  border-bottom: none;
+}
+</style>
+
 <script>
-  function toggleDigital() {
-    const sel = document.getElementById('formato');
-    const box = document.getElementById('digital-extra');
-    if (!sel || !box) return;
-    box.style.display = (sel.value === 'Digital') ? '' : 'none';
+// Variables globales para las listas de autocompletado
+let profesionalesList = [];
+let comitentsList = [];
+
+// Cargar datos de autocompletado al inicializar la página
+document.addEventListener('DOMContentLoaded', function() {
+  // Cargar profesionales
+  fetch('/api/profesionales')
+    .then(response => response.json())
+    .then(data => {
+      profesionalesList = data;
+    })
+    .catch(error => console.log('Error cargando profesionales:', error));
+
+  // Cargar comitentes  
+  fetch('/api/comitentes')
+    .then(response => response.json())
+    .then(data => {
+      comitentsList = data;
+    })
+    .catch(error => console.log('Error cargando comitentes:', error));
+
+  // Configurar autocompletado para campos existentes
+  setupAutocomplete('nombre_profesional', 'profesional_suggestions', profesionalesList);
+  setupAutocomplete('nombre_comitente', 'comitente_suggestions', comitentsList);
+});
+
+// Función principal de autocompletado
+function setupAutocomplete(inputId, suggestionsId, dataList) {
+  const input = document.getElementById(inputId);
+  const suggestions = document.getElementById(suggestionsId);
+  
+  if (!input || !suggestions) return;
+  
+  let currentFocus = -1;
+  
+  input.addEventListener('input', function() {
+    const value = this.value.toLowerCase();
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+    
+    if (value.length < 2) {
+      suggestions.style.display = 'none';
+      return;
+    }
+    
+    // Filtrar datos que tengan referencia a la lista actual
+    const currentList = inputId.includes('profesional') ? profesionalesList : comitentsList;
+    const filtered = currentList.filter(item => 
+      item.toLowerCase().includes(value)
+    ).slice(0, 10); // Mostrar máximo 10 sugerencias
+    
+    if (filtered.length === 0) {
+      suggestions.style.display = 'none';
+      return;
+    }
+    
+    filtered.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-suggestion';
+      div.textContent = item;
+      div.addEventListener('click', function() {
+        input.value = item;
+        suggestions.style.display = 'none';
+        input.focus();
+      });
+      suggestions.appendChild(div);
+    });
+    
+    suggestions.style.display = 'block';
+  });
+  
+  // Navegación con teclado
+  input.addEventListener('keydown', function(e) {
+    const suggestionItems = suggestions.querySelectorAll('.autocomplete-suggestion');
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentFocus++;
+      if (currentFocus >= suggestionItems.length) currentFocus = 0;
+      setActive(suggestionItems);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentFocus--;
+      if (currentFocus < 0) currentFocus = suggestionItems.length - 1;
+      setActive(suggestionItems);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (currentFocus > -1 && suggestionItems[currentFocus]) {
+        suggestionItems[currentFocus].click();
+      }
+    } else if (e.key === 'Escape') {
+      suggestions.style.display = 'none';
+      currentFocus = -1;
+    }
+  });
+  
+  function setActive(items) {
+    items.forEach(item => item.classList.remove('active'));
+    if (items[currentFocus]) {
+      items[currentFocus].classList.add('active');
+    }
   }
-  document.addEventListener('DOMContentLoaded', toggleDigital);
+  
+  // Cerrar sugerencias al hacer click fuera
+  document.addEventListener('click', function(e) {
+    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.style.display = 'none';
+    }
+  });
+}
+
+// Configurar autocompletado para inputs dinámicos de profesionales adicionales
+function setupAutocompleteForElement(input) {
+  if (!input || input.hasAttribute('data-autocomplete-setup')) return;
+  input.setAttribute('data-autocomplete-setup', 'true');
+  
+  let suggestions = input.nextElementSibling;
+  if (!suggestions || !suggestions.classList.contains('autocomplete-suggestions')) {
+    return;
+  }
+  
+  let currentFocus = -1;
+  
+  input.addEventListener('input', function() {
+    const value = this.value.toLowerCase();
+    suggestions.innerHTML = '';
+    currentFocus = -1;
+    
+    if (value.length < 2) {
+      suggestions.style.display = 'none';
+      return;
+    }
+    
+    const filtered = profesionalesList.filter(item => 
+      item.toLowerCase().includes(value)
+    ).slice(0, 10);
+    
+    if (filtered.length === 0) {
+      suggestions.style.display = 'none';
+      return;
+    }
+    
+    filtered.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-suggestion';
+      div.textContent = item;
+      div.addEventListener('click', function() {
+        input.value = item;
+        suggestions.style.display = 'none';
+        input.focus();
+      });
+      suggestions.appendChild(div);
+    });
+    
+    suggestions.style.display = 'block';
+  });
+  
+  // Navegación con teclado (igual que antes)
+  input.addEventListener('keydown', function(e) {
+    const suggestionItems = suggestions.querySelectorAll('.autocomplete-suggestion');
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      currentFocus++;
+      if (currentFocus >= suggestionItems.length) currentFocus = 0;
+      setActive(suggestionItems);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      currentFocus--;
+      if (currentFocus < 0) currentFocus = suggestionItems.length - 1;
+      setActive(suggestionItems);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (currentFocus > -1 && suggestionItems[currentFocus]) {
+        suggestionItems[currentFocus].click();
+      }
+    } else if (e.key === 'Escape') {
+      suggestions.style.display = 'none';
+      currentFocus = -1;
+    }
+  });
+  
+  function setActive(items) {
+    items.forEach(item => item.classList.remove('active'));
+    if (items[currentFocus]) {
+      items[currentFocus].classList.add('active');
+    }
+  }
+  
+  document.addEventListener('click', function(e) {
+    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+      suggestions.style.display = 'none';
+    }
+  });
+}
+
+// Funciones para profesionales adicionales (actualizadas)
+function agregarProfesional() {
+  const container = document.getElementById('profesionales-adicionales');
+  const div = document.createElement('div');
+  div.className = 'row g-2 mb-2 profesional-adicional-item';
+  div.innerHTML = `
+    <div class="col-md-6">
+      <div class="position-relative">
+        <input 
+          type="text" 
+          name="profesionales_adicionales_nombre[]" 
+          class="form-control autocomplete-input" 
+          placeholder="Nombre del profesional"
+          autocomplete="off">
+        <div class="autocomplete-suggestions"></div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <select name="profesionales_adicionales_profesion[]" class="form-select">
+        <option value="">Seleccionar profesión</option>
+        {% for p in profesiones %}
+        <option value="{{ p }}">{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
+        Eliminar
+      </button>
+    </div>
+  `;
+  container.appendChild(div);
+  
+  // Configurar autocompletado para el nuevo input
+  const newInput = div.querySelector('.autocomplete-input');
+  setupAutocompleteForElement(newInput);
+}
+
+function eliminarProfesional(button) {
+  const item = button.closest('.profesional-adicional-item');
+  item.remove();
+}
+
+// Función para mostrar/ocultar campos digitales
+function toggleDigital() {
+  const sel = document.getElementById('formato');
+  const box = document.getElementById('digital-extra');
+  if (!sel || !box) return;
+  box.style.display = (sel.value === 'Digital') ? '' : 'none';
+}
+
+// Configurar eventos al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  toggleDigital();
   document.getElementById('formato').addEventListener('change', toggleDigital);
+  
+  // Configurar autocompletado para inputs existentes de profesionales adicionales
+  document.querySelectorAll('.autocomplete-input').forEach(setupAutocompleteForElement);
+});
 </script>
 {% endblock %}
