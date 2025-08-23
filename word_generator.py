@@ -258,18 +258,28 @@ def _crear_diccionario_datos(expediente):
         # Profesionales adicionales (hasta 5 para cubrir casos comunes)
         '<#profesional_adicional_1>': expediente.profesionales_adicionales[0].nombre_profesional if len(expediente.profesionales_adicionales) > 0 else '-',
         '<#whatsapp_adicional_1>': expediente.profesionales_adicionales[0].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 0 else '-',
-        
+        # AGREGAR ESTAS LÍNEAS:
+        '<#profesion_adicional_1>': expediente.profesionales_adicionales[0].profesion or '-' if len(expediente.profesionales_adicionales) > 0 else '-',
+
         '<#profesional_adicional_2>': expediente.profesionales_adicionales[1].nombre_profesional if len(expediente.profesionales_adicionales) > 1 else '-',
         '<#whatsapp_adicional_2>': expediente.profesionales_adicionales[1].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 1 else '-',
-        
+        # AGREGAR ESTA LÍNEA:
+        '<#profesion_adicional_2>': expediente.profesionales_adicionales[1].profesion or '-' if len(expediente.profesionales_adicionales) > 1 else '-',
+
         '<#profesional_adicional_3>': expediente.profesionales_adicionales[2].nombre_profesional if len(expediente.profesionales_adicionales) > 2 else '-',
         '<#whatsapp_adicional_3>': expediente.profesionales_adicionales[2].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 2 else '-',
-        
+        # AGREGAR ESTA LÍNEA:
+        '<#profesion_adicional_3>': expediente.profesionales_adicionales[2].profesion or '-' if len(expediente.profesionales_adicionales) > 2 else '-',
+
         '<#profesional_adicional_4>': expediente.profesionales_adicionales[3].nombre_profesional if len(expediente.profesionales_adicionales) > 3 else '-',
         '<#whatsapp_adicional_4>': expediente.profesionales_adicionales[3].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 3 else '-',
-        
+        # AGREGAR ESTA LÍNEA:
+        '<#profesion_adicional_4>': expediente.profesionales_adicionales[3].profesion or '-' if len(expediente.profesionales_adicionales) > 3 else '-',
+
         '<#profesional_adicional_5>': expediente.profesionales_adicionales[4].nombre_profesional if len(expediente.profesionales_adicionales) > 4 else '-',
         '<#whatsapp_adicional_5>': expediente.profesionales_adicionales[4].whatsapp_profesional or '-' if len(expediente.profesionales_adicionales) > 4 else '-',
+        # AGREGAR ESTA LÍNEA:
+        '<#profesion_adicional_5>': expediente.profesionales_adicionales[4].profesion or '-' if len(expediente.profesionales_adicionales) > 4 else '-',
         
         # Contadores útiles
         '<#cantidad_profesionales>': str(len(expediente.todos_los_profesionales)),
