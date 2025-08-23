@@ -5,11 +5,6 @@
   <h3 class="me-auto">Expediente {{ item.nro_expediente_cpim or ('#' ~ item.id) }}</h3>
   <div class="d-flex gap-2">
     <!-- Mostrar formato como badge -->
-    {% if item.formato == 'Digital' %}
-      <span class="badge bg-info text-dark fs-6">📱 Digital</span>
-    {% elif item.formato == 'Papel' %}
-      <span class="badge bg-secondary fs-6">📄 Papel</span>
-    {% endif %}
     
     <!-- Botón para generar Word -->
     <form method="post" action="{{ url_for('generar_word_expediente', item_id=item.id) }}" class="d-inline">
