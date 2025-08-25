@@ -3,8 +3,7 @@ import json
 import uuid
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date
-
-from flask import Flask, render_template, request, redirect, url_for, flash, current_app, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, current_app, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy import or_
@@ -97,6 +96,7 @@ def create_app():
         visado_salubridad = _db.Column(_db.Boolean, default=False)
         visado_electrica = _db.Column(_db.Boolean, default=False)
         visado_electromecanica = _db.Column(_db.Boolean, default=False)
+        en_oficina_tecnica = _db.Column(_db.Boolean, default=False, nullable=True)
 
         # Estados de pago (siguen vigentes)
         estado_pago_sellado = _db.Column(_db.String(50), nullable=False, default="pendiente")
@@ -157,6 +157,7 @@ def create_app():
 
         # Estado del expediente
         finalizado = _db.Column(_db.Boolean, default=False, nullable=False)
+        en_oficina_tecnica = _db.Column(_db.Boolean, default=False, nullable=True)
         fecha_finalizado = _db.Column(_db.DateTime, nullable=True)
 
         # Metadatos
@@ -728,6 +729,39 @@ def create_app():
         _db.session.commit()
         flash("Expediente eliminado", "info")
         return redirect(url_for("lista_expedientes"))
+    
+    @app.post("/expedientes/<int:item_id>/oficina-tecnica")
+    def actualizar_oficina_tecnica(item_id):
+        """Actualiza el estado del checkbox 'En Oficina Técnica' de un expediente."""
+        try:
+            expediente = Expediente.query.get_or_404(item_id)
+            
+            # Obtener datos del request JSON
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "error": "No se recibieron datos"}), 400
+            
+            # Actualizar el estado
+            en_oficina_tecnica = bool(data.get("en_oficina_tecnica", False))
+            expediente.en_oficina_tecnica = en_oficina_tecnica
+            
+            # Guardar cambios
+            _db.session.add(expediente)
+            _db.session.commit()
+            
+            # Log para auditoria
+            current_app.logger.info(f"Expediente {expediente.nro_expediente_cpim or item_id} - Oficina Técnica: {'✓ Marcado' if en_oficina_tecnica else '✗ Desmarcado'}")
+            
+            return jsonify({
+                "success": True, 
+                "en_oficina_tecnica": en_oficina_tecnica,
+                "mensaje": f"Expediente {'marcado como en' if en_oficina_tecnica else 'removido de'} Oficina Técnica"
+            })
+            
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error al actualizar oficina técnica para expediente {item_id}: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
     
     @app.post("/expedientes/<int:item_id>/finalizar")
     def finalizar_expediente(item_id: int):

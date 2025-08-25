@@ -48,6 +48,7 @@
     <tr>
       <th style="width: 130px;">N° CPIM</th>
       <th style="width: 110px;">Fecha</th>
+      <th style="width: 120px;">Oficina Técnica</th>
       <th style="width: 100px;">Formato</th>
       <th style="width: 180px;">Profesional</th>
       <th style="width: 180px;">Comitente</th>
@@ -75,6 +76,19 @@
           —
         {% endif %}
       </td>
+
+      <!-- Checkbox Oficina Técnica -->
+      <td class="text-center">
+        <div class="form-check d-flex justify-content-center">
+          <input 
+            class="form-check-input oficina-tecnica-checkbox" 
+            type="checkbox" 
+            data-expediente-id="{{ it.id }}"
+            {{ 'checked' if it.en_oficina_tecnica else '' }}
+            title="Marcar si está en Oficina Técnica">
+        </div>
+      </td>
+      
       <td>
         {% if it.formato == 'Digital' %}
           <span class="badge bg-info text-dark">📱 Digital</span>
@@ -295,6 +309,70 @@
   </tbody>
 </table>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Manejar cambios en los checkboxes de oficina técnica
+  const checkboxes = document.querySelectorAll('.oficina-tecnica-checkbox');
+  
+  checkboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      const expedienteId = this.dataset.expedienteId;
+      const isChecked = this.checked;
+      
+      // Desactivar checkbox mientras se procesa
+      this.disabled = true;
+      
+      fetch(`/expedientes/${expedienteId}/oficina-tecnica`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          en_oficina_tecnica: isChecked 
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Mostrar feedback visual temporal
+          const originalBg = this.parentElement.style.backgroundColor;
+          this.parentElement.style.backgroundColor = '#d4edda';
+          setTimeout(() => {
+            this.parentElement.style.backgroundColor = originalBg;
+          }, 1000);
+        } else {
+          // Revertir checkbox si hay error
+          this.checked = !isChecked;
+          alert('Error al actualizar el estado: ' + (data.error || 'Error desconocido'));
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        // Revertir checkbox si hay error
+        this.checked = !isChecked;
+        alert('Error de conexión al actualizar el estado');
+      })
+      .finally(() => {
+        // Reactivar checkbox
+        this.disabled = false;
+      });
+    });
+  });
+});
+</script>
+
+<style>
+.oficina-tecnica-checkbox:checked {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.oficina-tecnica-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>
 
 {% if items.pages > 1 %}
 <nav aria-label="Paginación">
