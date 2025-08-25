@@ -85,7 +85,7 @@ def create_app():
         tipo_trabajo = _db.Column(_db.String(200), nullable=True)
 
         # Identificación / actores
-        nro_expediente_cpim = _db.Column(_db.String(100), nullable=True)
+        nro_expediente_cpim = _db.Column(_db.String(100), unique=True, nullable=True)
         nombre_profesional = _db.Column(_db.String(200), nullable=True)
         nombre_comitente = _db.Column(_db.String(200), nullable=True)
         ubicacion = _db.Column(_db.String(255), nullable=True)
@@ -183,7 +183,6 @@ def create_app():
             if self.nombre_profesional:
                 profesionales.append({
                     'nombre': self.nombre_profesional,
-                    'profesion': self.profesion,  # LÍNEA MODIFICADA
                     'whatsapp': self.whatsapp_profesional,
                     'es_principal': True
                 })
@@ -192,7 +191,6 @@ def create_app():
             for prof_adic in self.profesionales_adicionales:
                 profesionales.append({
                     'nombre': prof_adic.nombre_profesional,
-                    'profesion': prof_adic.profesion,  # LÍNEA NUEVA
                     'whatsapp': prof_adic.whatsapp_profesional,
                     'es_principal': False
                 })
@@ -426,9 +424,8 @@ def create_app():
         id = _db.Column(_db.Integer, primary_key=True)
         expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id", ondelete="CASCADE"), nullable=False)
         nombre_profesional = _db.Column(_db.String(200), nullable=False)
-        profesion = _db.Column(_db.String(120), nullable=True)  # NUEVA LÍNEA
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
-        orden = _db.Column(_db.Integer, nullable=True)
+        orden = _db.Column(_db.Integer, nullable=True)  # Para ordenar los profesionales
         
         # Metadatos
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
@@ -533,7 +530,6 @@ def create_app():
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
     ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
     PROFESIONES_PERMITIDAS = ["Ingeniero/a", "Licenciado/a", "Maestro Mayor de Obras", "Técnico/a"]
-    TIPOS_TRABAJO_PERMITIDOS = ["OBRA NUEVA", "REGISTRACION", "AMPLIACION"]  # NUEVA LÍNEA
 
     # === Rutas ===
     @app.get("/")
@@ -566,11 +562,7 @@ def create_app():
 
     @app.get("/expedientes/nuevo")
     def nuevo_expediente():
-        return render_template("expediente_form.html", 
-                            item=None, 
-                            formatos=FORMATO_PERMITIDOS, 
-                            profesiones=PROFESIONES_PERMITIDAS,
-                            tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)  # NUEVA LÍNEA
+        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
 
     @app.post("/expedientes/nuevo")
     def crear_expediente():
@@ -618,11 +610,7 @@ def create_app():
     @app.get("/expedientes/<int:item_id>/editar")
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
-        return render_template("expediente_form.html", 
-                            item=item, 
-                            formatos=FORMATO_PERMITIDOS, 
-                            profesiones=PROFESIONES_PERMITIDAS,
-                            tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)  # NUEVA LÍNEA
+        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
     
     @app.post("/gop/sincronizar")
     def sincronizar_gop():
@@ -1318,17 +1306,12 @@ def create_app():
             v = (form.get(k) or "").strip().lower()
             return v if v in {"pendiente", "pagado", "exento"} else "pendiente"
         
-        # AGREGAR VALIDACIÓN PARA TIPO DE TRABAJO
-        tipo_trabajo = (form.get("tipo_trabajo") or "").strip().upper()
-        if tipo_trabajo not in TIPOS_TRABAJO_PERMITIDOS:
-            tipo_trabajo = None  # O puedes poner un valor por defecto
-        
         return {
             "fecha": _parse_date(form.get("fecha")),
             "profesion": form.get("profesion"),
             "formato": form.get("formato"),
             "nro_copias": _parse_int(form.get("nro_copias")),
-            "tipo_trabajo": tipo_trabajo,
+            "tipo_trabajo": form.get("tipo_trabajo"),
             "nro_expediente_cpim": form.get("nro_expediente_cpim"),
             "nombre_profesional": form.get("nombre_profesional"),
             "nombre_comitente": form.get("nombre_comitente"),
@@ -1356,7 +1339,7 @@ def create_app():
         """Guarda los profesionales adicionales de un expediente."""
         # Obtener los datos de profesionales adicionales del formulario
         nombres = form.getlist('profesionales_adicionales_nombre[]')
-        profesiones = form.getlist('profesionales_adicionales_profesion[]')
+        whatsapps = form.getlist('profesionales_adicionales_whatsapp[]')
         
         # Eliminar profesionales adicionales existentes
         for prof_existente in expediente.profesionales_adicionales:
@@ -1366,13 +1349,12 @@ def create_app():
         for i, nombre in enumerate(nombres):
             nombre = nombre.strip()
             if nombre:  # Solo agregar si el nombre no está vacío
-                profesion = profesiones[i].strip() if i < len(profesiones) else ""
+                whatsapp = whatsapps[i].strip() if i < len(whatsapps) else ""
                 
                 profesional_adicional = ProfesionalAdicional(
                     expediente_id=expediente.id,
                     nombre_profesional=nombre,
-                    profesion=profesion if profesion else None,
-                    whatsapp_profesional=None,  # No solicitamos WhatsApp para adicionales
+                    whatsapp_profesional=whatsapp if whatsapp else None,
                     orden=i + 1
                 )
                 _db.session.add(profesional_adicional)
@@ -1550,69 +1532,5 @@ def create_app():
                 ))
                 count += 1
         return count
-    
-    # === API ENDPOINTS PARA AUTOCOMPLETADO ===
-    @app.get("/api/profesionales")
-    def api_profesionales():
-        """Devuelve lista única de profesionales para autocompletado."""
-        from flask import jsonify
-        
-        try:
-            # Obtener profesionales únicos del campo principal
-            profesionales_principales = _db.session.execute(
-                _db.text("""
-                    SELECT DISTINCT nombre_profesional 
-                    FROM expedientes 
-                    WHERE nombre_profesional IS NOT NULL 
-                    AND nombre_profesional != '' 
-                    ORDER BY nombre_profesional
-                """)
-            ).fetchall()
-            
-            # Obtener profesionales adicionales
-            profesionales_adicionales = _db.session.execute(
-                _db.text("""
-                    SELECT DISTINCT nombre_profesional 
-                    FROM profesionales_adicionales 
-                    WHERE nombre_profesional IS NOT NULL 
-                    AND nombre_profesional != '' 
-                    ORDER BY nombre_profesional
-                """)
-            ).fetchall()
-            
-            # Combinar y eliminar duplicados
-            todos_profesionales = set()
-            for prof in profesionales_principales:
-                todos_profesionales.add(prof[0])
-            for prof in profesionales_adicionales:
-                todos_profesionales.add(prof[0])
-            
-            return jsonify(sorted(list(todos_profesionales)))
-            
-        except Exception as e:
-            current_app.logger.error(f"Error obteniendo profesionales: {e}")
-            return jsonify([])
-
-    @app.get("/api/comitentes")
-    def api_comitentes():
-        """Devuelve lista única de comitentes para autocompletado."""
-        from flask import jsonify
-        
-        try:
-            comitentes = _db.session.execute(
-                _db.text("""
-                    SELECT DISTINCT nombre_comitente 
-                    FROM expedientes 
-                    WHERE nombre_comitente IS NOT NULL 
-                    AND nombre_comitente != '' 
-                    ORDER BY nombre_comitente
-                """)
-            ).fetchall()
-            
-            return jsonify([comitente[0] for comitente in comitentes])
-            
-        except Exception as e:
-            current_app.logger.error(f"Error obteniendo comitentes: {e}")
-            return jsonify([])
 
     return app
