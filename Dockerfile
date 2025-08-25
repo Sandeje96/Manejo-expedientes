@@ -52,4 +52,4 @@ ENV HEADLESS=true
 EXPOSE 8000
 
 # Comando para ejecutar la aplicación
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "wsgi:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers 1", "--timeout 300", "wsgi:app"]
