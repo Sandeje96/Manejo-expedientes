@@ -2,13 +2,169 @@
 {% block title %}Análisis de Tasas de Visado — CPIM{% endblock %}
 {% block content %}
 
-<div class="d-flex align-items-center mb-3">
-  <h3 class="me-auto">Análisis de Tasas de Visado</h3>
-  <a href="{{ url_for('lista_expedientes') }}" class="btn btn-secondary">← Volver</a>
+<style>
+/* ===== Paleta consistente ===== */
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --ink-900:#0b1220; --ink-700:#22314d; --ink-500:#475569; --ink-300:#9aa3b2;
+  --card-br: rgba(69,123,255,.18);
+  --chip-br: rgba(69,123,255,.35);
+  --row-border: rgba(25, 60, 180, .22);
+  --row-hover: rgba(25, 60, 180, .07);
+}
+
+/* ===== Encabezado y botón volver ===== */
+.header-wrap{
+  display:flex; align-items:center; gap:.75rem; margin-bottom:1rem; flex-wrap:wrap;
+}
+.header-title{
+  color:var(--primary-blue-20); font-weight:900; letter-spacing:.25px; margin:0;
+}
+.btn-go-back{
+  border:2px solid var(--primary-blue-55); color:var(--primary-blue-20); background:#fff;
+  padding:.4rem .65rem; border-radius:12px; font-weight:800; font-size:.9rem;
+}
+.btn-go-back:hover{ background:var(--primary-blue-90); }
+
+/* ===== Cards “glass” ===== */
+.card-lux{
+  background: rgba(255,255,255,.95);
+  border:1px solid var(--card-br); border-radius:18px;
+  box-shadow:0 18px 42px rgba(69,123,255,.08);
+}
+.card-lux .card-header{
+  background: linear-gradient(180deg, #f3f7ff, #eaf1ff);
+  color: var(--primary-blue-20);
+  border-bottom:1px solid var(--primary-blue-70);
+  border-radius:18px 18px 0 0;
+}
+.card-lux.primary .card-header{ 
+  background: linear-gradient(180deg, var(--primary-blue-80), #eaf1ff);
+  color:#0f1730;
+}
+.card-lux.success .card-header{
+  background: linear-gradient(180deg, #ecfdf5, #e7f7ef);
+  color:#166534;
+}
+.card-lux.info .card-header{
+  background: linear-gradient(180deg, #eef2ff, #e7ecff);
+  color:#3730a3;
+}
+.card-lux.warn .card-header{
+  background: linear-gradient(180deg, #fff7ed, #fff2e1);
+  color:#92400e;
+}
+
+/* ===== Formulario compacto y elegante ===== */
+.form-label{ color:var(--primary-blue-20); font-weight:700; }
+.form-control, .form-check-input{
+  border:2px solid var(--primary-blue-70); border-radius:10px; padding:.6rem .8rem;
+  background:rgba(255,255,255,.96);
+}
+.form-control:focus{
+  border-color:var(--primary-blue-50);
+  box-shadow:0 0 0 .2rem rgba(69,123,255,.18);
+}
+.btn-strong{
+  background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40));
+  border:none; color:#fff; padding:.55rem 1rem; border-radius:12px;
+  font-weight:800; font-size:.95rem; box-shadow:0 10px 22px rgba(69,123,255,.25);
+}
+.btn-strong:hover{ transform:translateY(-1px); color:#fff; filter:brightness(.98); }
+
+/* ===== Resumen ejecutivo: métricas ===== */
+.metrics-grid{
+  display:grid; gap:.9rem;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+}
+.metric{
+  position:relative; overflow:hidden;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px);
+  border:1px solid var(--card-br); border-radius:18px;
+  box-shadow:0 18px 42px rgba(69,123,255,.08);
+  text-align:center;
+}
+.metric::after{
+  content:""; position:absolute; inset:0;
+  background: radial-gradient(380px 120px at 90% -10%, rgba(69,123,255,.12), transparent 60%);
+}
+.metric .value{ font-size:1.9rem; line-height:1; font-weight:900; letter-spacing:.2px; margin-top:.2rem; }
+.metric small{ color:var(--ink-500); font-weight:600; }
+.metric .body{ padding:1rem .75rem; }
+.metric.success .value{ color:#16a34a; }
+.metric.warn .value{ color:#f59e0b; }
+.metric.info .value{ color:#0ea5e9; }
+.metric.primary .value{ color:var(--primary-blue-50); }
+
+/* ===== Tablas lujosas ===== */
+.table-wrap{
+  border:1px solid var(--card-br); border-radius:14px; overflow:hidden; background:#fff;
+  box-shadow:0 12px 28px rgba(69,123,255,.06);
+}
+.table.lx thead th{
+  background: linear-gradient(180deg, #f7faff, #eef4ff);
+  color:var(--primary-blue-20); border-bottom:1px solid var(--primary-blue-70);
+  font-weight:800;
+}
+.table.lx tbody td, .table.lx tbody th{
+  border-bottom:1px solid var(--row-border);
+}
+.table.lx tbody tr:hover{
+  background: var(--row-hover);
+}
+.table.lx tfoot th, .table.lx tfoot td{
+  background: #f8fbff; border-top:2px solid var(--primary-blue-70);
+  font-weight:800;
+}
+
+/* ===== Chips/Bages suaves ===== */
+.badge-soft{
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.35rem .6rem; border-radius:999px; font-weight:800; font-size:.85rem;
+  background: linear-gradient(180deg, #f7faff, #eef4ff);
+  border:1px solid var(--chip-br); color:var(--primary-blue-20);
+}
+.badge-soft.success{ background:#ecfdf5; border-color:#bbf7d0; color:#166534; }
+.badge-soft.warn{ background:#fff7ed; border-color:#fed7aa; color:#92400e; }
+.badge-soft.dark{ background:#f2f4f7; border-color:#e6e9ef; color:#111827; }
+
+/* ===== Alert suave ===== */
+.alert-soft{
+  border:1px solid var(--card-br);
+  background:linear-gradient(180deg,#f7faff,#ffffff);
+  color:var(--primary-blue-20);
+  border-radius:12px;
+}
+
+/* ===== Secciones ===== */
+.section-title{
+  display:flex; align-items:center; gap:.5rem; color:var(--ink-500); font-weight:900; letter-spacing:.3px;
+  margin:.2rem 0 .7rem 0;
+}
+.section-title::after{
+  content:""; flex:1; height:2px; border-radius:2px;
+  background: linear-gradient(90deg, var(--primary-blue-70), transparent);
+  opacity:.35;
+}
+</style>
+
+<!-- Header -->
+<div class="header-wrap">
+  <h3 class="header-title">Análisis de Tasas de Visado</h3>
+  <a href="{{ url_for('lista_expedientes') }}" class="btn-go-back ms-auto">← Volver</a>
 </div>
 
 <!-- Formulario de Análisis -->
-<div class="card mb-4">
+<div class="card card-lux primary mb-4">
   <div class="card-header">
     <h5 class="card-title mb-0">Ejecutar Nuevo Análisis</h5>
   </div>
@@ -19,27 +175,20 @@
         <input type="date" class="form-control" id="fecha_desde" name="fecha_desde" 
                value="{{ fecha_desde or '' }}" required>
       </div>
-      
       <div class="col-md-4">
         <label for="fecha_hasta" class="form-label">Fecha Hasta</label>
         <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" 
                value="{{ fecha_hasta or '' }}" required>
       </div>
-      
-      <div class="col-md-4">
-        <div class="form-check mt-4">
+      <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check">
           <input class="form-check-input" type="checkbox" id="incluir_no_pagados" 
                  name="incluir_no_pagados" {{ 'checked' if incluir_no_pagados else '' }}>
-          <label class="form-check-label" for="incluir_no_pagados">
-            Incluir expedientes no pagados
-          </label>
+          <label class="form-check-label ms-1" for="incluir_no_pagados">Incluir expedientes no pagados</label>
         </div>
       </div>
-      
       <div class="col-12">
-        <button type="submit" class="btn btn-primary">
-          📊 Ejecutar Análisis
-        </button>
+        <button type="submit" class="btn-strong">📊 Ejecutar Análisis</button>
       </div>
     </form>
   </div>
@@ -47,48 +196,41 @@
 
 <!-- Resultados del Análisis -->
 {% if resultado %}
-<div class="alert alert-info">
+<div class="alert alert-soft mb-3">
   <strong>Análisis ejecutado:</strong> 
   Período del {{ resultado.fecha_desde.strftime('%d/%m/%Y') }} al {{ resultado.fecha_hasta.strftime('%d/%m/%Y') }}
+  {% if incluir_no_pagados %}<span class="badge-soft warn ms-2">Incluye no pagados</span>{% endif %}
 </div>
 
 <!-- Resumen Ejecutivo -->
-<div class="card mb-4">
-  <div class="card-header bg-primary text-white">
+<div class="card card-lux mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">📈 Resumen Ejecutivo</h5>
   </div>
   <div class="card-body">
-    <div class="row">
-      <div class="col-md-3">
-        <div class="card text-center border-success">
-          <div class="card-body">
-            <h4 class="text-success">{{ resultado.resumen.cantidad_expedientes_pagados }}</h4>
-            <small>Expedientes Pagados</small>
-          </div>
+    <div class="metrics-grid">
+      <div class="metric success">
+        <div class="body">
+          <div class="value">{{ resultado.resumen.cantidad_expedientes_pagados }}</div>
+          <small>Expedientes Pagados</small>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card text-center border-warning">
-          <div class="card-body">
-            <h4 class="text-warning">{{ resultado.resumen.cantidad_expedientes_no_pagados }}</h4>
-            <small>Expedientes No Pagados</small>
-          </div>
+      <div class="metric warn">
+        <div class="body">
+          <div class="value">{{ resultado.resumen.cantidad_expedientes_no_pagados }}</div>
+          <small>Expedientes No Pagados</small>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card text-center border-info">
-          <div class="card-body">
-            <h4 class="text-info">{{ resultado.resumen.total_general|ars }}</h4>
-            <small>Total de Tasas</small>
-          </div>
+      <div class="metric info">
+        <div class="body">
+          <div class="value">{{ resultado.resumen.total_general|ars }}</div>
+          <small>Total de Tasas</small>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="card text-center border-primary">
-          <div class="card-body">
-            <h4 class="text-primary">{{ resultado.resumen.honorarios_cpim|ars }}</h4>
-            <small>Para CPIM (30%)</small>
-          </div>
+      <div class="metric primary">
+        <div class="body">
+          <div class="value">{{ resultado.resumen.honorarios_cpim|ars }}</div>
+          <small>Para CPIM (30%)</small>
         </div>
       </div>
     </div>
@@ -96,208 +238,191 @@
 </div>
 
 <!-- Cálculo de Honorarios -->
-<div class="card mb-4">
-  <div class="card-header bg-success text-white">
+<div class="card card-lux success mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">💰 Cálculo de Honorarios por Ingeniero</h5>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-bordered table-hover">
-        <thead class="table-dark">
-          <tr>
-            <th>Ingeniero</th>
-            <th>Total Tasas</th>
-            <th>Para Consejo (30%)</th>
-            <th>Para Ingeniero (70%)</th>
-            <th>Tipos de Visado</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>IMLAUER FERNANDO</strong></td>
-            <td>{{ resultado.honorarios.imlauer.total_tasas|ars }}</td>
-            <td>{{ resultado.honorarios.imlauer.para_cpim|ars }}</td>
-            <td class="table-success"><strong>{{ resultado.honorarios.imlauer.para_ingeniero|ars }}</strong></td>
-            <td>Gas, Salubridad</td>
-          </tr>
-          <tr>
-            <td><strong>ONETTO JOSÉ</strong></td>
-            <td>{{ resultado.honorarios.onetto.total_tasas|ars }}</td>
-            <td>{{ resultado.honorarios.onetto.para_cpim|ars }}</td>
-            <td class="table-success"><strong>{{ resultado.honorarios.onetto.para_ingeniero|ars }}</strong></td>
-            <td>Eléctrica, Electromecánica</td>
-          </tr>
-        </tbody>
-        <tfoot class="table-secondary">
-          <tr>
-            <th>TOTALES</th>
-            <th>{{ resultado.honorarios.totales_generales.total_todas_tasas|ars }}</th>
-            <th>{{ resultado.honorarios.totales_generales.total_para_cpim|ars }}</th>
-            <th>{{ resultado.honorarios.totales_generales.total_para_ingenieros|ars }}</th>
-            <th>-</th>
-          </tr>
-        </tfoot>
-      </table>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table lx table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Ingeniero</th>
+              <th>Total Tasas</th>
+              <th>Para Consejo (30%)</th>
+              <th>Para Ingeniero (70%)</th>
+              <th>Tipos de Visado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>IMLAUER FERNANDO</strong></td>
+              <td>{{ resultado.honorarios.imlauer.total_tasas|ars }}</td>
+              <td>{{ resultado.honorarios.imlauer.para_cpim|ars }}</td>
+              <td><span class="badge-soft success">{{ resultado.honorarios.imlauer.para_ingeniero|ars }}</span></td>
+              <td>Gas, Salubridad</td>
+            </tr>
+            <tr>
+              <td><strong>ONETTO JOSÉ</strong></td>
+              <td>{{ resultado.honorarios.onetto.total_tasas|ars }}</td>
+              <td>{{ resultado.honorarios.onetto.para_cpim|ars }}</td>
+              <td><span class="badge-soft success">{{ resultado.honorarios.onetto.para_ingeniero|ars }}</span></td>
+              <td>Eléctrica, Electromecánica</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>TOTALES</th>
+              <th>{{ resultado.honorarios.totales_generales.total_todas_tasas|ars }}</th>
+              <th>{{ resultado.honorarios.totales_generales.total_para_cpim|ars }}</th>
+              <th>{{ resultado.honorarios.totales_generales.total_para_ingenieros|ars }}</th>
+              <th>-</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- Totales por Tipo de Visado -->
-<div class="card mb-4">
-  <div class="card-header bg-info text-white">
+<div class="card card-lux info mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">📋 Totales por Tipo de Visado (Solo obras pagadas)</h5>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Tipo de Visado</th>
-            <th>Total Pagado</th>
-            <th>Ingeniero Responsable</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Gas</td>
-            <td>{{ resultado.totales_por_tipo.gas|ars }}</td>
-            <td>IMLAUER FERNANDO</td>
-          </tr>
-          <tr>
-            <td>Salubridad</td>
-            <td>{{ resultado.totales_por_tipo.salubridad|ars }}</td>
-            <td>IMLAUER FERNANDO</td>
-          </tr>
-          <tr>
-            <td>Eléctrica</td>
-            <td>{{ resultado.totales_por_tipo.electrica|ars }}</td>
-            <td>ONETTO JOSÉ</td>
-          </tr>
-          <tr>
-            <td>Electromecánica</td>
-            <td>{{ resultado.totales_por_tipo.electromecanica|ars }}</td>
-            <td>ONETTO JOSÉ</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table lx mb-0">
+          <thead>
+            <tr>
+              <th>Tipo de Visado</th>
+              <th>Total Pagado</th>
+              <th>Ingeniero Responsable</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Gas</td>
+              <td>{{ resultado.totales_por_tipo.gas|ars }}</td>
+              <td>IMLAUER FERNANDO</td>
+            </tr>
+            <tr>
+              <td>Salubridad</td>
+              <td>{{ resultado.totales_por_tipo.salubridad|ars }}</td>
+              <td>IMLAUER FERNANDO</td>
+            </tr>
+            <tr>
+              <td>Eléctrica</td>
+              <td>{{ resultado.totales_por_tipo.electrica|ars }}</td>
+              <td>ONETTO JOSÉ</td>
+            </tr>
+            <tr>
+              <td>Electromecánica</td>
+              <td>{{ resultado.totales_por_tipo.electromecanica|ars }}</td>
+              <td>ONETTO JOSÉ</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- Expedientes Pagados -->
 {% if resultado.expedientes_pagados %}
-<div class="card mb-4">
-  <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+<div class="card card-lux success mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
     <h5 class="card-title mb-0">✅ Obras Pagadas ({{ resultado.expedientes_pagados|length }})</h5>
-    <div>
-      <a href="{{ url_for('exportar_analisis_tasas', formato='excel') }}" class="btn btn-light btn-sm">
-        📄 Exportar Excel
-      </a>
-      <a href="{{ url_for('exportar_analisis_tasas', formato='pdf') }}" class="btn btn-light btn-sm">
-        📄 Exportar PDF
-      </a>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('exportar_analisis_tasas', formato='excel') }}" class="btn btn-light btn-sm">📄 Exportar Excel</a>
+      <a href="{{ url_for('exportar_analisis_tasas', formato='pdf') }}" class="btn btn-light btn-sm">📄 Exportar PDF</a>
     </div>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead class="table-dark">
-          <tr>
-            <th>Fecha</th>
-            <th>GOP</th>
-            <th>Profesional</th>
-            <th>Comitente</th>
-            <th>Gas</th>
-            <th>Salubridad</th>
-            <th>Eléctrica</th>
-            <th>Electromecánica</th>
-            <th>Total Visados</th>
-            <th>Estado Expediente</th>
-            <th>Bandeja Actual</th>
-        </tr>
-        </thead>
-        <tbody>
-          {% for exp in resultado.expedientes_pagados %}
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table lx table-sm table-hover mb-0">
+          <thead>
             <tr>
-                <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
-                <td>{{ exp.gop_numero or '-' }}</td>
-                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
-                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
-                <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
-                <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
-                <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
-                <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
-                <td><strong>{{ exp.total_visados|ars }}</strong></td>
-                
-                <!-- NUEVA COLUMNA: Estado del Expediente -->
-                <td>
+              <th>Fecha</th>
+              <th>GOP</th>
+              <th>Profesional</th>
+              <th>Comitente</th>
+              <th>Gas</th>
+              <th>Salubridad</th>
+              <th>Eléctrica</th>
+              <th>Electromecánica</th>
+              <th>Total Visados</th>
+              <th>Estado Expediente</th>
+              <th>Bandeja Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for exp in resultado.expedientes_pagados %}
+            <tr>
+              <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
+              <td>{{ exp.gop_numero or '-' }}</td>
+              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
+              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
+              <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
+              <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
+              <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
+              <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
+              <td><span class="badge-soft success">{{ exp.total_visados|ars }}</span></td>
+              <td>
                 {% if exp.finalizado %}
-                    <span class="badge bg-success">✅ Finalizado</span>
-                    {% if exp.fecha_finalizado %}
-                    <br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
-                    {% endif %}
+                  <span class="badge-soft success">Finalizado</span>
+                  {% if exp.fecha_finalizado %}<br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>{% endif %}
                 {% else %}
-                    <span class="badge bg-warning text-dark">⏳ En proceso</span>
+                  <span class="badge-soft warn">En proceso</span>
                 {% endif %}
-                </td>
-                
-                <!-- NUEVA COLUMNA: Bandeja Actual -->
-                <td style="max-width: 200px;">
+              </td>
+              <td style="max-width: 220px;">
                 {% set bandejas_info = exp.bandejas_info %}
                 {% if not bandejas_info.aplica_gop %}
-                    <small class="text-muted">{{ bandejas_info.mensaje }}</small>
+                  <small class="text-muted">{{ bandejas_info.mensaje }}</small>
                 {% elif not bandejas_info.tiene_datos_bandeja %}
-                    <small class="text-warning">Sin datos de bandeja</small>
-                    {% if bandejas_info.gop_info.numero %}
+                  <small class="text-warning">Sin datos de bandeja</small>
+                  {% if bandejas_info.gop_info.numero %}
                     <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
-                    {% endif %}
+                  {% endif %}
                 {% else %}
-                    <!-- Mostrar todos los usuarios que tienen el expediente -->
-                    {% set usuarios_activos = [] %}
-                    {% for tipo, info in bandejas_info.bandejas.items() %}
+                  {% set usuarios_activos = [] %}
+                  {% for tipo, info in bandejas_info.bandejas.items() %}
                     {% if info.nombre and info.usuario %}
-                        {% set _ = usuarios_activos.append({
-                        'tipo': tipo,
-                        'usuario': info.usuario,
-                        'fecha': info.fecha,
-                        'dias': info.dias
-                        }) %}
+                      {% set _ = usuarios_activos.append({'tipo':tipo,'usuario':info.usuario,'fecha':info.fecha,'dias':info.dias}) %}
                     {% endif %}
-                    {% endfor %}
-                    
-                    {% if usuarios_activos %}
+                  {% endfor %}
+                  {% if usuarios_activos %}
                     {% for usuario_info in usuarios_activos %}
-                        <div class="mb-1">
-                        <!-- Badge de color según el tipo de bandeja -->
+                      <div class="mb-1">
                         {% if usuario_info.tipo == 'cpim' %}
-                            <span class="badge bg-primary me-1">C</span>
+                          <span class="badge-soft info me-1">C</span>
                         {% elif usuario_info.tipo == 'imlauer' %}
-                            <span class="badge bg-warning text-dark me-1">I</span>
+                          <span class="badge-soft warn me-1">I</span>
                         {% elif usuario_info.tipo == 'onetto' %}
-                            <span class="badge bg-secondary me-1">O</span>
+                          <span class="badge-soft dark me-1">O</span>
                         {% else %}
-                            <span class="badge bg-success me-1">P</span>
+                          <span class="badge-soft success me-1">P</span>
                         {% endif %}
-                        
-                        <!-- Nombre del usuario -->
                         <span class="fw-bold">{{ usuario_info.usuario }}</span>
-                        
-                        <!-- Días en esa bandeja -->
                         {% if usuario_info.dias > 0 %}
-                            <span class="badge bg-light text-dark ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
+                          <span class="badge-soft ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
                         {% endif %}
-                        </div>
+                      </div>
                     {% endfor %}
-                    {% else %}
+                  {% else %}
                     <small class="text-muted">Sin asignación</small>
-                    {% endif %}
+                  {% endif %}
                 {% endif %}
-                </td>
-                
+              </td>
             </tr>
             {% endfor %}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -305,110 +430,93 @@
 
 <!-- Expedientes No Pagados -->
 {% if resultado.expedientes_no_pagados %}
-<div class="card mb-4">
-  <div class="card-header bg-warning text-dark">
+<div class="card card-lux warn mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">⏳ Obras No Pagadas ({{ resultado.expedientes_no_pagados|length }})</h5>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead class="table-warning">
-          <tr>
-            <th>Fecha</th>
-            <th>GOP</th>
-            <th>Profesional</th>
-            <th>Comitente</th>
-            <th>Gas</th>
-            <th>Salubridad</th>
-            <th>Eléctrica</th>
-            <th>Electromecánica</th>
-            <th>Total Visados</th>
-            <th>Estado Expediente</th>
-            <th>Bandeja Actual</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for exp in resultado.expedientes_no_pagados %}
-          <tr>
-            <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
-            <td>{{ exp.gop_numero or '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
-            <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
-            <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
-            <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
-            <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
-            <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
-            <td><strong>{{ exp.total_visados|ars }}</strong></td>
-            
-            <!-- NUEVA COLUMNA: Estado del Expediente -->
-            <td>
-            {% if exp.finalizado %}
-                <span class="badge bg-success">✅ Finalizado</span>
-                {% if exp.fecha_finalizado %}
-                <br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
-                {% endif %}
-            {% else %}
-                <span class="badge bg-warning text-dark">⏳ En proceso</span>
-            {% endif %}
-            </td>
-            
-            <!-- NUEVA COLUMNA: Bandeja Actual -->
-            <td style="max-width: 200px;">
-            {% set bandejas_info = exp.bandejas_info %}
-            {% if not bandejas_info.aplica_gop %}
-                <small class="text-muted">{{ bandejas_info.mensaje }}</small>
-            {% elif not bandejas_info.tiene_datos_bandeja %}
-                <small class="text-warning">Sin datos de bandeja</small>
-                {% if bandejas_info.gop_info.numero %}
-                <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
-                {% endif %}
-            {% else %}
-                <!-- Mostrar todos los usuarios que tienen el expediente -->
-                {% set usuarios_activos = [] %}
-                {% for tipo, info in bandejas_info.bandejas.items() %}
-                {% if info.nombre and info.usuario %}
-                    {% set _ = usuarios_activos.append({
-                    'tipo': tipo,
-                    'usuario': info.usuario,
-                    'fecha': info.fecha,
-                    'dias': info.dias
-                    }) %}
-                {% endif %}
-                {% endfor %}
-                
-                {% if usuarios_activos %}
-                {% for usuario_info in usuarios_activos %}
-                    <div class="mb-1">
-                    <!-- Badge de color según el tipo de bandeja -->
-                    {% if usuario_info.tipo == 'cpim' %}
-                        <span class="badge bg-primary me-1">C</span>
-                    {% elif usuario_info.tipo == 'imlauer' %}
-                        <span class="badge bg-warning text-dark me-1">I</span>
-                    {% elif usuario_info.tipo == 'onetto' %}
-                        <span class="badge bg-secondary me-1">O</span>
-                    {% else %}
-                        <span class="badge bg-success me-1">P</span>
-                    {% endif %}
-                    
-                    <!-- Nombre del usuario -->
-                    <span class="fw-bold">{{ usuario_info.usuario }}</span>
-                    
-                    <!-- Días en esa bandeja -->
-                    {% if usuario_info.dias > 0 %}
-                        <span class="badge bg-light text-dark ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
-                    {% endif %}
-                    </div>
-                {% endfor %}
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table lx table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>GOP</th>
+              <th>Profesional</th>
+              <th>Comitente</th>
+              <th>Gas</th>
+              <th>Salubridad</th>
+              <th>Eléctrica</th>
+              <th>Electromecánica</th>
+              <th>Total Visados</th>
+              <th>Estado Expediente</th>
+              <th>Bandeja Actual</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for exp in resultado.expedientes_no_pagados %}
+            <tr>
+              <td>{{ exp.fecha.strftime('%d/%m/%Y') if exp.fecha else '-' }}</td>
+              <td>{{ exp.gop_numero or '-' }}</td>
+              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.profesional or '-' }}</td>
+              <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">{{ exp.comitente or '-' }}</td>
+              <td>{{ exp.gas|ars if exp.gas > 0 else '-' }}</td>
+              <td>{{ exp.salubridad|ars if exp.salubridad > 0 else '-' }}</td>
+              <td>{{ exp.electrica|ars if exp.electrica > 0 else '-' }}</td>
+              <td>{{ exp.electromecanica|ars if exp.electromecanica > 0 else '-' }}</td>
+              <td><span class="badge-soft">{{ exp.total_visados|ars }}</span></td>
+              <td>
+                {% if exp.finalizado %}
+                  <span class="badge-soft success">Finalizado</span>
+                  {% if exp.fecha_finalizado %}<br><small class="text-muted">{{ exp.fecha_finalizado.strftime('%d/%m/%Y') }}</small>{% endif %}
                 {% else %}
-                <small class="text-muted">Sin asignación</small>
+                  <span class="badge-soft warn">En proceso</span>
                 {% endif %}
-            {% endif %}
-            </td>
-            
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </td>
+              <td style="max-width: 220px;">
+                {% set bandejas_info = exp.bandejas_info %}
+                {% if not bandejas_info.aplica_gop %}
+                  <small class="text-muted">{{ bandejas_info.mensaje }}</small>
+                {% elif not bandejas_info.tiene_datos_bandeja %}
+                  <small class="text-warning">Sin datos de bandeja</small>
+                  {% if bandejas_info.gop_info.numero %}
+                    <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
+                  {% endif %}
+                {% else %}
+                  {% set usuarios_activos = [] %}
+                  {% for tipo, info in bandejas_info.bandejas.items() %}
+                    {% if info.nombre and info.usuario %}
+                      {% set _ = usuarios_activos.append({'tipo':tipo,'usuario':info.usuario,'fecha':info.fecha,'dias':info.dias}) %}
+                    {% endif %}
+                  {% endfor %}
+                  {% if usuarios_activos %}
+                    {% for usuario_info in usuarios_activos %}
+                      <div class="mb-1">
+                        {% if usuario_info.tipo == 'cpim' %}
+                          <span class="badge-soft info me-1">C</span>
+                        {% elif usuario_info.tipo == 'imlauer' %}
+                          <span class="badge-soft warn me-1">I</span>
+                        {% elif usuario_info.tipo == 'onetto' %}
+                          <span class="badge-soft dark me-1">O</span>
+                        {% else %}
+                          <span class="badge-soft success me-1">P</span>
+                        {% endif %}
+                        <span class="fw-bold">{{ usuario_info.usuario }}</span>
+                        {% if usuario_info.dias > 0 %}
+                          <span class="badge-soft ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  {% else %}
+                    <small class="text-muted">Sin asignación</small>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -416,8 +524,8 @@
 
 <!-- Crear Cierre Oficial -->
 {% if resultado and resultado.expedientes_pagados %}
-<div class="card mb-4">
-  <div class="card-header bg-success text-white">
+<div class="card card-lux success mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">💼 Crear Cierre Oficial</h5>
   </div>
   <div class="card-body">
@@ -425,7 +533,6 @@
       <strong>⚠️ Importante:</strong> Al crear un cierre oficial, los {{ resultado.expedientes_pagados|length }} expedientes pagados 
       de este período serán marcados como procesados y NO aparecerán en futuros análisis.
     </div>
-    
     <form method="post" action="{{ url_for('cerrar_analisis_tasas') }}" class="row g-3">
       <div class="col-md-8">
         <label for="nombre_cierre" class="form-label">Nombre del Cierre</label>
@@ -433,25 +540,19 @@
                value="Cierre {{ resultado.fecha_desde.strftime('%m/%Y') }}" required>
         <div class="form-text">Ejemplo: "Cierre Agosto 2025" o "Liquidación Q3 2025"</div>
       </div>
-      
       <div class="col-md-4">
         <label class="form-label">Total a Distribuir</label>
-        <div class="form-control-plaintext fw-bold text-success fs-5">
-          {{ resultado.resumen.total_general|ars }}
-        </div>
+        <div class="form-control-plaintext fw-bold text-success fs-5">{{ resultado.resumen.total_general|ars }}</div>
       </div>
-      
       <div class="col-12">
         <label for="observaciones" class="form-label">Observaciones</label>
         <textarea class="form-control" id="observaciones" name="observaciones" rows="3" 
                   placeholder="Observaciones adicionales sobre este cierre (opcional)"></textarea>
       </div>
-      
-      <!-- Resumen del cierre -->
       <div class="col-12">
-        <div class="card bg-light">
+        <div class="card card-lux">
           <div class="card-body">
-            <h6>Resumen del Cierre:</h6>
+            <div class="section-title">Resumen del Cierre</div>
             <div class="row">
               <div class="col-md-4">
                 <strong>Ing. Imlauer:</strong> {{ resultado.honorarios.imlauer.para_ingeniero|ars }}
@@ -469,13 +570,12 @@
           </div>
         </div>
       </div>
-      
-      <div class="col-12">
-        <button type="submit" class="btn btn-success btn-lg" 
+      <div class="col-12 d-flex align-items-center gap-3">
+        <button type="submit" class="btn-strong"
                 onclick="return confirm('¿Confirmar creación del cierre? Esta acción NO se puede deshacer. Los expedientes serán marcados como procesados.')">
           💼 Crear Cierre Oficial
         </button>
-        <small class="text-muted ms-3">Esta acción es irreversible</small>
+        <small class="text-muted">Esta acción es irreversible</small>
       </div>
     </form>
   </div>
@@ -484,72 +584,72 @@
 
 {% endif %}
 
-<!-- Cierres Anteriores (si existieran) -->
+<!-- Cierres Anteriores -->
 {% if cierres_anteriores and cierres_anteriores|length > 0 %}
-<div class="card">
-  <div class="card-header bg-secondary text-white">
+<div class="card card-lux mb-4">
+  <div class="card-header">
     <h5 class="card-title mb-0">📚 Cierres Anteriores</h5>
   </div>
   <div class="card-body">
-    <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead class="table-dark">
-          <tr>
-            <th>Nombre</th>
-            <th>Período</th>
-            <th>Fecha Cierre</th>
-            <th>Honorarios Imlauer</th>
-            <th>Honorarios Onetto</th>
-            <th>Para CPIM</th>
-            <th>Total</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for cierre in cierres_anteriores %}
-          <tr>
-            <td><strong>{{ cierre.nombre_cierre or cierre[1] }}</strong></td>
-            <td>
-              {% if cierre.fecha_desde %}
-                {{ cierre.fecha_desde.strftime('%d/%m/%Y') if cierre.fecha_desde.strftime else cierre[2] }} - 
-                {{ cierre.fecha_hasta.strftime('%d/%m/%Y') if cierre.fecha_hasta.strftime else cierre[3] }}
-              {% else %}
-                {{ cierre[2] }} - {{ cierre[3] }}
-              {% endif %}
-            </td>
-            <td>
-              {% if cierre.fecha_cierre %}
-                {{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') if cierre.fecha_cierre.strftime else cierre[4] }}
-              {% else %}
-                {{ cierre[4] }}
-              {% endif %}
-            </td>
-            <td>{{ (cierre.total_imlauer or cierre[5])|ars }}</td>
-            <td>{{ (cierre.total_onetto or cierre[6])|ars }}</td>
-            <td>{{ (cierre.total_cpim or cierre[7])|ars }}</td>
-            <td><strong>{{ (cierre.total_general or cierre[8])|ars }}</strong></td>
-            <td>
-              <a href="{{ url_for('ver_cierre_tasas', cierre_id=(cierre.id or cierre[0])) }}" 
-                 class="btn btn-sm btn-outline-primary">
-                Ver Detalle
-              </a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table lx table-sm table-hover mb-0">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Período</th>
+              <th>Fecha Cierre</th>
+              <th>Honorarios Imlauer</th>
+              <th>Honorarios Onetto</th>
+              <th>Para CPIM</th>
+              <th>Total</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cierre in cierres_anteriores %}
+            <tr>
+              <td><strong>{{ cierre.nombre_cierre or cierre[1] }}</strong></td>
+              <td>
+                {% if cierre.fecha_desde %}
+                  {{ cierre.fecha_desde.strftime('%d/%m/%Y') if cierre.fecha_desde.strftime else cierre[2] }} - 
+                  {{ cierre.fecha_hasta.strftime('%d/%m/%Y') if cierre.fecha_hasta.strftime else cierre[3] }}
+                {% else %}
+                  {{ cierre[2] }} - {{ cierre[3] }}
+                {% endif %}
+              </td>
+              <td>
+                {% if cierre.fecha_cierre %}
+                  {{ cierre.fecha_cierre.strftime('%d/%m/%Y %H:%M') if cierre.fecha_cierre.strftime else cierre[4] }}
+                {% else %}
+                  {{ cierre[4] }}
+                {% endif %}
+              </td>
+              <td>{{ (cierre.total_imlauer or cierre[5])|ars }}</td>
+              <td>{{ (cierre.total_onetto or cierre[6])|ars }}</td>
+              <td>{{ (cierre.total_cpim or cierre[7])|ars }}</td>
+              <td><strong>{{ (cierre.total_general or cierre[8])|ars }}</strong></td>
+              <td>
+                <a href="{{ url_for('ver_cierre_tasas', cierre_id=(cierre.id or cierre[0])) }}" 
+                   class="btn btn-sm btn-outline-primary">Ver Detalle</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 {% else %}
-<div class="card">
-  <div class="card-header bg-light">
+<div class="card card-lux">
+  <div class="card-header">
     <h5 class="card-title mb-0 text-muted">📚 Cierres Anteriores</h5>
   </div>
   <div class="card-body">
     <div class="text-center text-muted py-3">
-      <i class="bi bi-archive fs-1 mb-2"></i>
-      <p>No hay cierres registrados aún.</p>
+      <i class="bi bi-archive fs-1 mb-2" style="color:var(--primary-blue-20)"></i>
+      <p class="mb-1">No hay cierres registrados aún.</p>
       <small>Una vez que crees tu primer cierre, aparecerá aquí.</small>
     </div>
   </div>
