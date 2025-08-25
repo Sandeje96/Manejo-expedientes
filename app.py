@@ -530,6 +530,7 @@ def create_app():
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
     ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
     PROFESIONES_PERMITIDAS = ["Ingeniero/a", "Licenciado/a", "Maestro Mayor de Obras", "Técnico/a"]
+    TIPOS_TRABAJO_PERMITIDOS = ["REGISTRACION", "AMPLIACION", "OBRA NUEVA"]
 
     # === Rutas ===
     @app.get("/")
@@ -562,7 +563,7 @@ def create_app():
 
     @app.get("/expedientes/nuevo")
     def nuevo_expediente():
-        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
+        return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS, tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)
 
     @app.post("/expedientes/nuevo")
     def crear_expediente():
@@ -610,7 +611,7 @@ def create_app():
     @app.get("/expedientes/<int:item_id>/editar")
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
-        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS)
+        return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS, tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)
     
     @app.post("/gop/sincronizar")
     def sincronizar_gop():
@@ -696,6 +697,11 @@ def create_app():
             flash("Formato inválido. Debe ser Papel o Digital.", "danger")
             return redirect(request.referrer or url_for("editar_expediente", item_id=item.id))
         data["formato"] = formato
+        tipo_trabajo = (data.get("tipo_trabajo") or "").strip().upper()
+        if tipo_trabajo and tipo_trabajo not in TIPOS_TRABAJO_PERMITIDOS:
+            flash("Tipo de trabajo inválido. Debe ser REGISTRACION, AMPLIACION u OBRA NUEVA.", "danger")
+            return redirect(request.referrer or url_for("nuevo_expediente"))
+        data["tipo_trabajo"] = tipo_trabajo if tipo_trabajo else None
 
         for k, v in data.items():
             setattr(item, k, v)
