@@ -2,384 +2,665 @@
 {% block title %}Expedientes — CPIM{% endblock %}
 {% block content %}
 
-<div class="d-flex align-items-center mb-3">
-  <h3 class="me-auto">Expedientes</h3>
-  <div class="btn-group" role="group">
-    <a href="{{ url_for('nuevo_expediente') }}" class="btn btn-primary">+ Nuevo</a>
+<style>
+/* ======== Paleta ======== */
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --ink-900:#0b1220; --ink-700:#22314d; --ink-300:#9aa3b2;
+  --bg:#f6f8ff;
+
+  --row-border: rgba(25, 60, 180, .22);
+  --row-hover: rgba(25, 60, 180, .07);
+  --card-br: rgba(69,123,255,.18);
+  --chip-br: rgba(69,123,255,.3);
+}
+
+/* ======== Header y acciones ======== */
+.page-header{ display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+.page-title{
+  margin:0; font-weight:800; color:var(--primary-blue-20); letter-spacing:.2px;
+  display:flex; align-items:center; gap:.5rem;
+}
+.page-title::before{
+  content:""; width:10px; height:24px; border-radius:12px;
+  background: linear-gradient(180deg, var(--primary-blue-60), var(--primary-blue-40));
+  box-shadow:0 6px 18px rgba(69,123,255,.35);
+}
+.actions .btn{ border-radius:12px; font-weight:700; }
+
+/* Botones principales */
+.btn-strong{
+  background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40));
+  border:none; color:#fff; padding:.55rem .9rem; border-radius:12px;
+  box-shadow:0 8px 24px rgba(69,123,255,.35); font-size:.9rem;
+}
+.btn-strong:hover{ transform:translateY(-1px); color:#fff; filter:brightness(.98); }
+.btn-outline{
+  border:2px solid var(--primary-blue-55); color:var(--primary-blue-20); background:#fff;
+  padding:.45rem .75rem; border-radius:12px; font-weight:700; font-size:.9rem;
+}
+.btn-outline:hover{ background:var(--primary-blue-90); color:var(--primary-blue-20); }
+
+/* ======== Barra filtros / herramientas ======== */
+.toolbar{
+  background:#fff; border:1px solid var(--card-br); border-radius:16px;
+  padding:.7rem; margin-bottom:1rem; box-shadow:0 10px 28px rgba(69,123,255,.09);
+}
+.toolbar .form-control, .toolbar .form-select{
+  border:2px solid var(--primary-blue-80); border-radius:12px; background:#fff; height:40px;
+}
+.toolbar .form-control:focus, .toolbar .form-select:focus{
+  border-color:var(--primary-blue-50); box-shadow:0 0 0 .2rem rgba(69,123,255,.15);
+}
+
+/* Toggle densidad y columnas */
+.tools-right{ display:flex; align-items:center; gap:.5rem; justify-content:flex-end; }
+.switch{
+  display:inline-flex; align-items:center; gap:.4rem; cursor:pointer; user-select:none;
+  padding:.2rem .5rem; border-radius:999px; border:1px dashed var(--chip-br); font-size:.85rem;
+}
+.switch input{ display:none; }
+.switch .dot{
+  width:12px; height:12px; border-radius:50%;
+  background: var(--primary-blue-60); box-shadow:0 0 0 3px var(--primary-blue-90) inset;
+}
+.switch input:checked + .dot{ background: var(--primary-blue-40); }
+
+.colmenu{ position:relative; }
+.colmenu-btn{
+  border:2px solid var(--primary-blue-55); background:#fff; color:var(--primary-blue-20);
+  padding:.35rem .6rem; border-radius:10px; font-weight:700; font-size:.85rem;
+}
+.colmenu-btn:hover{ background:var(--primary-blue-90); }
+.colmenu-list{
+  position:absolute; right:0; top:110%; min-width:220px; background:#fff; border:1px solid var(--card-br);
+  box-shadow:0 14px 32px rgba(69,123,255,.12); border-radius:12px; padding:.5rem; display:none; z-index:10;
+}
+.colmenu.open .colmenu-list{ display:block; }
+.colmenu-list label{
+  display:flex; align-items:center; gap:.6rem; padding:.3rem .5rem; border-radius:8px; cursor:pointer; font-size:.9rem;
+}
+.colmenu-list label:hover{ background:var(--primary-blue-90); }
+
+/* ======== Tabla ======== */
+.table-card{
+  background:#fff; border:1px solid var(--card-br); border-radius:18px;
+  box-shadow:0 18px 42px rgba(69,123,255,.1); overflow:hidden;
+}
+
+/* Scroll SIEMPRE visible */
+.table-scroll{
+  overflow-x: scroll; /* siempre disponible */
+  overflow-y: hidden;
+  min-height: 24px; /* asegura que la barra tenga espacio */
+}
+.table-scroll::-webkit-scrollbar{ height:10px; }
+.table-scroll::-webkit-scrollbar-track{ background:#edf1ff; border-radius:10px; }
+.table-scroll::-webkit-scrollbar-thumb{
+  background: linear-gradient(135deg,var(--primary-blue-70),var(--primary-blue-55)); border-radius:10px;
+}
+
+.table{
+  margin:0; color:var(--ink-700);
+  min-width: 1400px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size:.92rem;
+}
+.table thead th{
+  position:sticky; top:0; z-index:1;
+  background:linear-gradient(180deg,#f3f7ff, #e9f0ff);
+  color:var(--primary-blue-20);
+  font-weight:800; border-bottom:1px solid var(--primary-blue-70);
+  white-space:nowrap; letter-spacing:.2px; padding:.55rem .6rem;
+}
+
+/* Filas con separadores marcados (más finas) */
+.table tbody td{
+  border-bottom: 1px solid var(--row-border);
+  box-shadow: 0 1px 0 0 rgba(255,255,255,.6) inset;
+  padding: .55rem .55rem;  /* más bajo por defecto */
+}
+.table tbody tr:hover td{ background: var(--row-hover); }
+
+/* Modo denso aún más fino */
+.table.dense tbody td{ padding:.38rem .45rem; font-size:.9rem; }
+.table.dense thead th{ padding:.45rem .5rem; }
+
+/* Chips */
+.chip{
+  display:inline-block; padding:.2rem .5rem; border-radius:999px;
+  background:linear-gradient(180deg,#f7faff,#eef4ff);
+  border:1px solid var(--chip-br); color:var(--primary-blue-20); font-weight:700; font-size:.82rem;
+}
+.chip-muted{ background:#f2f4f7; border-color:#e6e9ef; color:#64748b; }
+.chip-good{ background:#ecfdf5; border-color:#bbf7d0; color:#166534; }
+.chip-warn{ background:#fff7ed; border-color:#fed7aa; color:#92400e; }
+.chip-bad{ background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+.chip-info{ background:#eef2ff; border-color:#c7d2fe; color:#3730a3; }
+
+/* Badges fantasmas */
+.badge-ghost{
+  display:inline-flex; align-items:center; gap:.25rem;
+  padding:.15rem .5rem; border-radius:999px; font-weight:700; font-size:.82rem;
+  background:linear-gradient(180deg,#fafcff,#f1f6ff);
+  border:1px dashed var(--chip-br); color:var(--primary-blue-20);
+}
+
+/* Truncado */
+.col-clip{ max-width: 230px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.col-clip-sm{ max-width: 150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Checkbox */
+.form-check-input.oficina-tecnica-checkbox{
+  width:1rem; height:1rem; border:2px solid var(--primary-blue-55);
+}
+.form-check-input.oficina-tecnica-checkbox:checked{
+  background-color: var(--primary-blue-50); border-color: var(--primary-blue-50);
+}
+
+/* Acciones por fila: XS */
+.row-actions .btn{
+  border-radius:8px; padding:.25rem .4rem; font-weight:700; font-size:.78rem; line-height:1.1;
+}
+.row-actions .btn-strong{ box-shadow:none; }
+.row-actions .btn + .btn{ margin-left:.25rem; }
+
+/* Finalizado */
+tr.finalizado{ opacity: 0.3; }
+
+/* Paginación */
+.pagination .page-link{
+  border-radius:10px; border:1px solid var(--card-br);
+  color:var(--primary-blue-20); font-weight:700;
+}
+.pagination .page-item.active .page-link,
+.pagination .page-link:hover{
+  background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40)); color:#fff; border-color:transparent;
+}
+
+/* Snackbar */
+.snackbar{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background: #0f172a; color:#fff; padding:.5rem .8rem; border-radius:10px;
+  box-shadow:0 14px 34px rgba(0,0,0,.28); z-index: 9999; font-weight:700; opacity:0; pointer-events:none;
+  transition: opacity .25s ease, transform .25s ease; font-size:.85rem;
+}
+.snackbar.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
+</style>
+
+<div class="page-header">
+  <h3 class="page-title">Expedientes</h3>
+  <div class="actions">
+    <a href="{{ url_for('nuevo_expediente') }}" class="btn btn-strong">+ Nuevo</a>
     <form method="post" action="{{ url_for('sincronizar_gop') }}" class="d-inline">
-      <button type="submit" class="btn btn-outline-info" onclick="return confirm('¿Ejecutar sincronización con GOP? Esto puede tomar unos minutos.')">
+      <button type="submit" class="btn btn-outline"
+        onclick="return confirm('¿Ejecutar sincronización con GOP? Esto puede tomar unos minutos.')">
         🔄 Sincronizar GOP
       </button>
     </form>
-    <a href="{{ url_for('estado_gop') }}" class="btn btn-outline-secondary">Estado GOP</a>
+    <a href="{{ url_for('estado_gop') }}" class="btn btn-outline">Estado GOP</a>
   </div>
 </div>
 
-<form class="row g-2 mb-3" method="get">
-  <div class="col-sm-6 col-md-5 col-lg-4">
-    <input
-      class="form-control"
-      type="search"
-      name="q"
-      placeholder="Buscar (N° CPIM, N° GOP, profesional, comitente)"
-      value="{{ q or '' }}">
-  </div>
+<div class="toolbar">
+  <form class="row g-2 align-items-center" method="get">
+    <div class="col-sm-6 col-md-5 col-lg-4">
+      <input
+        class="form-control"
+        type="search"
+        name="q"
+        placeholder="Buscar (N° CPIM, N° GOP, profesional, comitente)"
+        value="{{ q or '' }}">
+    </div>
 
-  <div class="col-sm-4 col-md-3 col-lg-2">
-    <select class="form-select" name="formato" aria-label="Filtrar por formato">
-      <option value="" {{ '' == (formato or '') and 'selected' or '' }}>Todos los formatos</option>
-      <option value="Papel" {{ (formato or '') == 'Papel' and 'selected' or '' }}>📄 Papel</option>
-      <option value="Digital" {{ (formato or '') == 'Digital' and 'selected' or '' }}>📱 Digital</option>
-    </select>
-  </div>
+    <div class="col-sm-4 col-md-3 col-lg-2">
+      <select class="form-select" name="formato" aria-label="Filtrar por formato">
+        <option value="" {{ '' == (formato or '') and 'selected' or '' }}>Todos los formatos</option>
+        <option value="Papel" {{ (formato or '') == 'Papel' and 'selected' or '' }}>📄 Papel</option>
+        <option value="Digital" {{ (formato or '') == 'Digital' and 'selected' or '' }}>📱 Digital</option>
+      </select>
+    </div>
 
-  <div class="col-auto">
-    <button class="btn btn-outline-secondary" type="submit">Buscar</button>
-  </div>
-  <div class="col-auto">
-    <a class="btn btn-outline-dark" href="{{ url_for('lista_expedientes') }}">Borrar filtros</a>
-  </div>
-</form>
+    <div class="col-auto">
+      <button class="btn btn-outline" type="submit">Buscar</button>
+    </div>
+    <div class="col-auto">
+      <a class="btn btn-outline" href="{{ url_for('lista_expedientes') }}">Borrar filtros</a>
+    </div>
 
-<!-- Tabla más ancha con scroll horizontal -->
-<div class="table-responsive" style="overflow-x: auto;">
-<table class="table table-striped table-hover align-middle" style="min-width: 2000px;">
-  <thead>
-    <tr>
-      <th style="width: 130px;">N° CPIM</th>
-      <th style="width: 110px;">Fecha</th>
-      <th style="width: 120px;">Oficina Técnica</th>
-      <th style="width: 100px;">Formato</th>
-      <th style="width: 180px;">Profesional</th>
-      <th style="width: 180px;">Comitente</th>
-      <th style="width: 150px;">Partida Inmobiliaria</th>
-      <th style="width: 120px;">Fecha de Pago</th>
-      <th style="width: 100px;">GOP</th>
-      <th style="width: 200px;">Bandeja CPIM</th>
-      <th style="width: 200px;">Bandeja IMLAUER</th>
-      <th style="width: 200px;">Bandeja ONETTO</th>
-      <th style="width: 200px;">Bandeja PROFESIONAL</th>
-      <th style="width: 100px;">Sellado</th>
-      <th style="width: 100px;">Visado</th>
-      <th style="width: 120px;">Fecha Finalizado</th>
-      <th class="text-end" style="width: 240px;"></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for it in items.items %}
-    <tr class="{% if it.finalizado %}table-secondary opacity-50{% endif %}">
-      <td>{{ it.nro_expediente_cpim or '-' }}</td>
-      <td>
-        {% if it.fecha %}
-          {{ it.fecha.strftime('%d/%m/%Y') }}
-        {% else %}
-          —
-        {% endif %}
-      </td>
+    <div class="col d-none d-md-block"></div>
 
-      <!-- Checkbox Oficina Técnica -->
-      <td class="text-center">
-        <div class="form-check d-flex justify-content-center">
-          <input 
-            class="form-check-input oficina-tecnica-checkbox" 
-            type="checkbox" 
-            data-expediente-id="{{ it.id }}"
-            {{ 'checked' if it.en_oficina_tecnica else '' }}
-            title="Marcar si está en Oficina Técnica">
+    <!-- Herramientas derechas: densidad + columnas -->
+    <div class="col-auto tools-right">
+      <label class="switch" title="Cambiar densidad">
+        <input id="densityToggle" type="checkbox">
+        <span class="dot"></span>
+        <span>Modo compacto</span>
+      </label>
+
+      <div class="colmenu" id="colMenu">
+        <button type="button" class="colmenu-btn">Columnas ▾</button>
+        <div class="colmenu-list" id="colMenuList">
+          <!-- opciones via JS -->
         </div>
-      </td>
-      
-      <td>
-        {% if it.formato == 'Digital' %}
-          <span class="badge bg-info text-dark">📱 Digital</span>
-        {% elif it.formato == 'Papel' %}
-          <span class="badge bg-secondary">📄 Papel</span>
-        {% else %}
-          <span class="text-muted">—</span>
-        {% endif %}
-      </td>
-      <td style="max-width: 180px;">
-        {% set todos_profesionales = it.nombres_profesionales_concatenados %}
-        {% if todos_profesionales %}
-          <!-- Mostrar profesional principal -->
-          <div class="fw-bold text-primary" style="font-size: 0.9em;">
-            {{ todos_profesionales[0] }}
-          </div>
-          
-          <!-- Mostrar profesionales adicionales si existen -->
-          {% if todos_profesionales|length > 1 %}
-            {% for profesional in todos_profesionales[1:] %}
-              <div class="text-muted" style="font-size: 0.8em; border-left: 2px solid #dee2e6; padding-left: 8px; margin-top: 2px;">
-                {{ profesional }}
-              </div>
-            {% endfor %}
-          {% endif %}
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.nombre_comitente or '' }}">
-        {{ it.nombre_comitente or '' }}
-      </td>
-      <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ it.partida_inmobiliaria or '' }}">
-        {% if it.partida_inmobiliaria %}
-          <span class="badge bg-light text-dark border">{{ it.partida_inmobiliaria }}</span>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-      <td>
-        {% if it.fecha_salida %}
-          {{ it.fecha_salida.strftime('%d/%m/%Y') }}
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- GOP -->
-      <td>
-        {% if it.formato == 'Papel' %}
-          <span class="text-muted small">No aplica</span>
-        {% elif it.gop_numero %}
-          <span class="badge bg-primary">{{ it.gop_numero }}</span>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- BANDEJA CPIM -->
-      <td style="max-width: 200px;">
-        {% if it.formato == 'Papel' %}
-          <span class="text-muted small">No aplica<br>(formato papel)</span>
-        {% elif it.bandeja_cpim_nombre %}
-          <small class="text-success" style="word-break: break-word;">{{ it.bandeja_cpim_nombre|limpiar_bandeja }}</small>
-          <br><small class="text-info">{{ it.bandeja_cpim_usuario or '-' }}</small>
-          {% if it.bandeja_cpim_fecha %}
-            <br><small class="text-primary">{{ it.bandeja_cpim_fecha.strftime('%d/%m/%Y') }}</small>
-            {% set dias = it.dias_en_bandeja_cpim %}
-            {% if dias <= 5 %}
-              <span class="badge bg-success">{{ dias }}d</span>
-            {% elif dias <= 12 %}
-              <span class="badge bg-warning text-dark">{{ dias }}d</span>
-            {% else %}
-              <span class="badge bg-danger">{{ dias }}d</span>
-            {% endif %}
-          {% endif %}
-        {% elif it.gop_numero %}
-          <small class="text-muted">-</small>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- BANDEJA IMLAUER -->
-      <td style="max-width: 200px;">
-        {% if it.formato == 'Papel' %}
-          <span class="text-muted small">No aplica<br>(formato papel)</span>
-        {% elif it.bandeja_imlauer_nombre %}
-          <small class="text-success" style="word-break: break-word;">{{ it.bandeja_imlauer_nombre|limpiar_bandeja }}</small>
-          <br><small class="text-info">{{ it.bandeja_imlauer_usuario or '-' }}</small>
-          {% if it.bandeja_imlauer_fecha %}
-            <br><small class="text-primary">{{ it.bandeja_imlauer_fecha.strftime('%d/%m/%Y') }}</small>
-            {% set dias = it.dias_en_bandeja_imlauer %}
-            {% if dias <= 5 %}
-              <span class="badge bg-success">{{ dias }}d</span>
-            {% elif dias <= 12 %}
-              <span class="badge bg-warning text-dark">{{ dias }}d</span>
-            {% else %}
-              <span class="badge bg-danger">{{ dias }}d</span>
-            {% endif %}
-          {% endif %}
-        {% elif it.gop_numero %}
-          <small class="text-muted">-</small>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- BANDEJA ONETTO -->
-      <td style="max-width: 200px;">
-        {% if it.formato == 'Papel' %}
-          <span class="text-muted small">No aplica<br>(formato papel)</span>
-        {% elif it.bandeja_onetto_nombre %}
-          <small class="text-success" style="word-break: break-word;">{{ it.bandeja_onetto_nombre|limpiar_bandeja }}</small>
-          <br><small class="text-info">{{ it.bandeja_onetto_usuario or '-' }}</small>
-          {% if it.bandeja_onetto_fecha %}
-            <br><small class="text-primary">{{ it.bandeja_onetto_fecha.strftime('%d/%m/%Y') }}</small>
-            {% set dias = it.dias_en_bandeja_onetto %}
-            {% if dias <= 5 %}
-              <span class="badge bg-success">{{ dias }}d</span>
-            {% elif dias <= 12 %}
-              <span class="badge bg-warning text-dark">{{ dias }}d</span>
-            {% else %}
-              <span class="badge bg-danger">{{ dias }}d</span>
-            {% endif %}
-          {% endif %}
-        {% elif it.gop_numero %}
-          <small class="text-muted">-</small>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- BANDEJA PROFESIONAL -->
-      <td style="max-width: 200px;">
-        {% if it.formato == 'Papel' %}
-          <span class="text-muted small">No aplica<br>(formato papel)</span>
-        {% elif it.bandeja_profesional_nombre %}
-          <small class="text-success" style="word-break: break-word;">{{ it.bandeja_profesional_nombre|limpiar_bandeja }}</small>
-          <br><small class="text-info">{{ it.bandeja_profesional_usuario or '-' }}</small>
-          {% if it.bandeja_profesional_fecha %}
-            <br><small class="text-primary">{{ it.bandeja_profesional_fecha.strftime('%d/%m/%Y') }}</small>
-            {% set dias = it.dias_en_bandeja_profesional %}
-            {% if dias <= 5 %}
-              <span class="badge bg-success">{{ dias }}d</span>
-            {% elif dias <= 12 %}
-              <span class="badge bg-warning text-dark">{{ dias }}d</span>
-            {% else %}
-              <span class="badge bg-danger">{{ dias }}d</span>
-            {% endif %}
-          {% endif %}
-        {% elif it.gop_numero %}
-          <small class="text-muted">-</small>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <!-- Estado Sellado -->
-      <td>
-        {% set s = (it.estado_pago_sellado or 'pendiente')|lower %}
-        {% if s == 'pagado' %}
-          <span class="badge text-bg-success">Pagado</span>
-        {% elif s == 'exento' %}
-          <span class="badge text-bg-secondary">Exento</span>
-        {% else %}
-          <span class="badge text-bg-warning text-dark">Pendiente</span>
-        {% endif %}
-      </td>
-
-      <!-- Estado Visado -->
-      <td>
-        {% set v = (it.estado_pago_visado or 'pendiente')|lower %}
-        {% if v == 'pagado' %}
-          <span class="badge text-bg-success">Pagado</span>
-        {% elif v == 'exento' %}
-          <span class="badge text-bg-secondary">Exento</span>
-        {% else %}
-          <span class="badge text-bg-warning text-dark">Pendiente</span>
-        {% endif %}
-      </td>
-
-      <!-- Fecha Finalizado -->
-      <td>
-        {% if it.fecha_finalizado %}
-          <small class="text-success">{{ it.fecha_finalizado.strftime('%d/%m/%Y') }}</small>
-          <br><small class="text-muted">{{ it.fecha_finalizado.strftime('%H:%M') }}</small>
-        {% else %}
-          <span class="text-muted">-</span>
-        {% endif %}
-      </td>
-
-      <td class="text-end">
-        {% if it.finalizado %}
-          <span class="badge bg-success me-2">Finalizado</span>
-          <!-- Solo botón VER para expedientes finalizados -->
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
-          <form action="{{ url_for('reactivar_expediente', item_id=it.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-outline-warning" type="submit" title="Reactivar expediente">
-              🔄 Reactivar
-            </button>
-          </form>
-        {% else %}
-          <!-- Botones completos para expedientes activos -->
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
-          <form action="{{ url_for('finalizar_expediente', item_id=it.id) }}" method="post" class="d-inline">
-            <button class="btn btn-sm btn-success" type="submit" onclick="return confirm('¿Marcar como finalizado?')" title="Finalizar expediente">
-              ✓ Finalizado
-            </button>
-          </form>
-          <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar expediente?');">
-            <button class="btn btn-sm btn-outline-danger" type="submit">Eliminar</button>
-          </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="16" class="text-center text-muted">Sin registros</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+      </div>
+    </div>
+  </form>
 </div>
+
+<div class="table-card">
+  <!-- Scroll SIEMPRE visible -->
+  <div class="table-scroll">
+    <table class="table align-middle" id="expTable">
+      <thead>
+        <tr>
+          <th data-col="cpim" style="width: 110px;">N° CPIM</th>
+          <th data-col="fecha" style="width: 100px;">Fecha</th>
+          <th data-col="otecnica" style="width: 120px;">A liquidar</th>
+          <th data-col="formato" style="width: 100px;">Formato</th>
+          <th data-col="profesionales" style="width: 220px;">Profesional(es)</th>
+          <th data-col="comitente" style="width: 200px;">Comitente</th>
+          <th data-col="partida" style="width: 140px;">Partida</th>
+          <th data-col="fechapago" style="width: 110px;">Fecha Pago</th>
+          <th data-col="gop" style="width: 110px;">GOP</th>
+          <th data-col="bcpim" style="width: 200px;">Bandeja CPIM</th>
+          <th data-col="bimlauer" style="width: 200px;">Bandeja IMLAUER</th>
+          <th data-col="bonetto" style="width: 200px;">Bandeja ONETTO</th>
+          <th data-col="bprof" style="width: 200px;">Bandeja PROFESIONAL</th>
+          <th data-col="sellado" style="width: 100px;">Sellado</th>
+          <th data-col="visado" style="width: 100px;">Visado</th>
+          <th data-col="finalizado" style="width: 130px;">Finalizado</th>
+          <th data-col="acciones" class="text-end" style="width: 200px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items.items %}
+        <tr class="{{ 'finalizado' if it.finalizado }}">
+          <td data-col="cpim"><span class="chip col-clip-sm" title="{{ it.nro_expediente_cpim or '-' }}">{{ it.nro_expediente_cpim or '-' }}</span></td>
+
+          <td data-col="fecha">
+            {% if it.fecha %}
+              {{ it.fecha.strftime('%d/%m/%Y') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <!-- O. Técnica -->
+          <td data-col="otecnica" class="text-center">
+            <div class="form-check d-flex justify-content-center">
+              <input 
+                class="form-check-input oficina-tecnica-checkbox" 
+                type="checkbox" 
+                data-expediente-id="{{ it.id }}"
+                {{ 'checked' if it.en_oficina_tecnica else '' }}
+                title="Marcar si está en Oficina Técnica">
+            </div>
+          </td>
+          
+          <td data-col="formato">
+            {% if it.formato == 'Digital' %}
+              <span class="badge-ghost">📱 Digital</span>
+            {% elif it.formato == 'Papel' %}
+              <span class="badge-ghost">📄 Papel</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="profesionales" class="col-clip" title="{{ it.nombres_profesionales_concatenados|join(', ') if it.nombres_profesionales_concatenados }}">
+            {% set todos_profesionales = it.nombres_profesionales_concatenados %}
+            {% if todos_profesionales %}
+              <div class="fw-bold" style="color:var(--primary-blue-20);">{{ todos_profesionales[0] }}</div>
+              {% if todos_profesionales|length > 1 %}
+                {% for profesional in todos_profesionales[1:] %}
+                  <div class="text-muted small" style="border-left:2px solid #e3e9ff; padding-left:8px; margin-top:2px;">
+                    {{ profesional }}
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="comitente" class="col-clip" title="{{ it.nombre_comitente or '' }}">
+            {{ it.nombre_comitente or '—' }}
+          </td>
+
+          <td data-col="partida" class="col-clip-sm" title="{{ it.partida_inmobiliaria or '' }}">
+            {% if it.partida_inmobiliaria %}
+              <span class="chip chip-muted">{{ it.partida_inmobiliaria }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="fechapago">
+            {% if it.fecha_salida %}
+              {{ it.fecha_salida.strftime('%d/%m/%Y') }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="gop">
+            {% if it.formato == 'Papel' %}
+              <span class="text-muted small">No aplica</span>
+            {% elif it.gop_numero %}
+              <span class="chip chip-info">{{ it.gop_numero }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Bandejas -->
+          <td data-col="bcpim" class="col-clip" title="{{ it.bandeja_cpim_nombre or '' }}">
+            {% if it.formato == 'Papel' %}
+              <span class="text-muted small">No aplica</span>
+            {% elif it.bandeja_cpim_nombre %}
+              <div class="fw-semibold" style="color:#0f766e;">{{ it.bandeja_cpim_nombre|limpiar_bandeja }}</div>
+              <div class="text-muted small">{{ it.bandeja_cpim_usuario or '—' }}</div>
+              {% if it.bandeja_cpim_fecha %}
+                <div class="small" style="color:var(--primary-blue-20);">{{ it.bandeja_cpim_fecha.strftime('%d/%m/%Y') }}</div>
+                {% set dias = it.dias_en_bandeja_cpim %}
+                {% if dias <= 5 %}
+                  <span class="chip chip-good">{{ dias }}d</span>
+                {% elif dias <= 12 %}
+                  <span class="chip chip-warn">{{ dias }}d</span>
+                {% else %}
+                  <span class="chip chip-bad">{{ dias }}d</span>
+                {% endif %}
+              {% endif %}
+            {% elif it.gop_numero %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="bimlauer" class="col-clip" title="{{ it.bandeja_imlauer_nombre or '' }}">
+            {% if it.formato == 'Papel' %}
+              <span class="text-muted small">No aplica</span>
+            {% elif it.bandeja_imlauer_nombre %}
+              <div class="fw-semibold" style="color:#0f766e;">{{ it.bandeja_imlauer_nombre|limpiar_bandeja }}</div>
+              <div class="text-muted small">{{ it.bandeja_imlauer_usuario or '—' }}</div>
+              {% if it.bandeja_imlauer_fecha %}
+                <div class="small" style="color:var(--primary-blue-20);">{{ it.bandeja_imlauer_fecha.strftime('%d/%m/%Y') }}</div>
+                {% set dias = it.dias_en_bandeja_imlauer %}
+                {% if dias <= 5 %}
+                  <span class="chip chip-good">{{ dias }}d</span>
+                {% elif dias <= 12 %}
+                  <span class="chip chip-warn">{{ dias }}d</span>
+                {% else %}
+                  <span class="chip chip-bad">{{ dias }}d</span>
+                {% endif %}
+              {% endif %}
+            {% elif it.gop_numero %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="bonetto" class="col-clip" title="{{ it.bandeja_onetto_nombre or '' }}">
+            {% if it.formato == 'Papel' %}
+              <span class="text-muted small">No aplica</span>
+            {% elif it.bandeja_onetto_nombre %}
+              <div class="fw-semibold" style="color:#0f766e;">{{ it.bandeja_onetto_nombre|limpiar_bandeja }}</div>
+              <div class="text-muted small">{{ it.bandeja_onetto_usuario or '—' }}</div>
+              {% if it.bandeja_onetto_fecha %}
+                <div class="small" style="color:var(--primary-blue-20);">{{ it.bandeja_onetto_fecha.strftime('%d/%m/%Y') }}</div>
+                {% set dias = it.dias_en_bandeja_onetto %}
+                {% if dias <= 5 %}
+                  <span class="chip chip-good">{{ dias }}d</span>
+                {% elif dias <= 12 %}
+                  <span class="chip chip-warn">{{ dias }}d</span>
+                {% else %}
+                  <span class="chip chip-bad">{{ dias }}d</span>
+                {% endif %}
+              {% endif %}
+            {% elif it.gop_numero %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="bprof" class="col-clip" title="{{ it.bandeja_profesional_nombre or '' }}">
+            {% if it.formato == 'Papel' %}
+              <span class="text-muted small">No aplica</span>
+            {% elif it.bandeja_profesional_nombre %}
+              <div class="fw-semibold" style="color:#0f766e;">{{ it.bandeja_profesional_nombre|limpiar_bandeja }}</div>
+              <div class="text-muted small">{{ it.bandeja_profesional_usuario or '—' }}</div>
+              {% if it.bandeja_profesional_fecha %}
+                <div class="small" style="color:var(--primary-blue-20);">{{ it.bandeja_profesional_fecha.strftime('%d/%m/%Y') }}</div>
+                {% set dias = it.dias_en_bandeja_profesional %}
+                {% if dias <= 5 %}
+                  <span class="chip chip-good">{{ dias }}d</span>
+                {% elif dias <= 12 %}
+                  <span class="chip chip-warn">{{ dias }}d</span>
+                {% else %}
+                  <span class="chip chip-bad">{{ dias }}d</span>
+                {% endif %}
+              {% endif %}
+            {% elif it.gop_numero %}
+              <span class="text-muted">—</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <!-- Estado Sellado -->
+          <td data-col="sellado">
+            {% set s = (it.estado_pago_sellado or 'pendiente')|lower %}
+            {% if s == 'pagado' %}
+              <span class="chip chip-good">Pagado</span>
+            {% elif s == 'exento' %}
+              <span class="chip chip-muted">Exento</span>
+            {% else %}
+              <span class="chip chip-warn">Pendiente</span>
+            {% endif %}
+          </td>
+
+          <!-- Estado Visado -->
+          <td data-col="visado">
+            {% set v = (it.estado_pago_visado or 'pendiente')|lower %}
+            {% if v == 'pagado' %}
+              <span class="chip chip-good">Pagado</span>
+            {% elif v == 'exento' %}
+              <span class="chip chip-muted">Exento</span>
+            {% else %}
+              <span class="chip chip-warn">Pendiente</span>
+            {% endif %}
+          </td>
+
+          <!-- Fecha Finalizado -->
+          <td data-col="finalizado">
+            {% if it.fecha_finalizado %}
+              <div class="chip chip-good">{{ it.fecha_finalizado.strftime('%d/%m/%Y') }}</div>
+              <div class="text-muted small">{{ it.fecha_finalizado.strftime('%H:%M') }}</div>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td data-col="acciones" class="text-end row-actions">
+            {% if it.finalizado %}
+              <span class="chip chip-good me-1">Finalizado</span>
+              <a class="btn btn-outline btn-sm" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
+              <form action="{{ url_for('reactivar_expediente', item_id=it.id) }}" method="post" class="d-inline">
+                <button class="btn btn-outline btn-sm" type="submit" title="Reactivar expediente">🔄</button>
+              </form>
+            {% else %}
+              <a class="btn btn-outline btn-sm" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
+              <a class="btn btn-strong btn-sm" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
+              <form action="{{ url_for('finalizar_expediente', item_id=it.id) }}" method="post" class="d-inline">
+                <button class="btn btn-strong btn-sm" type="submit"
+                  onclick="return confirm('¿Marcar como finalizado?')" title="Finalizar expediente">✓</button>
+              </form>
+              <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline"
+                onsubmit="return confirm('¿Eliminar expediente?');">
+                <button class="btn btn-outline btn-sm" type="submit" style="border-color:#ef4444; color:#ef4444;">🗑</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="16" class="text-center text-muted py-4">Sin registros</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="snackbar" class="snackbar">Actualizado</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Manejar cambios en los checkboxes de oficina técnica
+  /* ====== Toggle densidad (arranca normal; activás para ultra compacto) ====== */
+  const table = document.getElementById('expTable');
+  const densityToggle = document.getElementById('densityToggle');
+  const DENSITY_KEY = 'cpim_table_density';
+
+  const savedDensity = localStorage.getItem(DENSITY_KEY);
+  if(savedDensity === 'dense'){ table.classList.add('dense'); densityToggle.checked = true; }
+
+  densityToggle?.addEventListener('change', () => {
+    table.classList.toggle('dense', densityToggle.checked);
+    localStorage.setItem(DENSITY_KEY, densityToggle.checked ? 'dense' : 'normal');
+  });
+
+  /* ====== Column selector (dinámico + persistente) ====== */
+  const COLS_KEY = 'cpim_table_cols';
+  const defaultCols = [
+    'cpim','fecha','otecnica','formato','profesionales','comitente','partida',
+    'fechapago','gop','bcpim','bimlauer','bonetto','bprof','sellado','visado','finalizado','acciones'
+  ];
+  const savedCols = JSON.parse(localStorage.getItem(COLS_KEY) || 'null');
+  const activeCols = Array.isArray(savedCols) && savedCols.length ? savedCols : defaultCols.slice();
+
+  const colMenu = document.getElementById('colMenu');
+  const colMenuList = document.getElementById('colMenuList');
+
+  function buildColMenu(){
+    colMenuList.innerHTML = '';
+    defaultCols.forEach(col=>{
+      const id = 'col__'+col;
+      const label = document.createElement('label');
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = id;
+      chk.checked = activeCols.includes(col);
+      chk.dataset.col = col;
+      const span = document.createElement('span');
+      span.textContent = nombreColumnaHumana(col);
+      label.appendChild(chk);
+      label.appendChild(span);
+      colMenuList.appendChild(label);
+
+      chk.addEventListener('change', ()=>{
+        toggleColumn(col, chk.checked);
+        persistCols();
+      });
+    });
+  }
+
+  function nombreColumnaHumana(key){
+    const map = {
+      cpim:'N° CPIM', fecha:'Fecha', otecnica:'Oficina Técnica', formato:'Formato',
+      profesionales:'Profesional(es)', comitente:'Comitente', partida:'Partida',
+      fechapago:'Fecha Pago', gop:'GOP', bcpim:'Bandeja CPIM', bimlauer:'Bandeja IMLAUER',
+      bonetto:'Bandeja ONETTO', bprof:'Bandeja PROFESIONAL', sellado:'Sellado',
+      visado:'Visado', finalizado:'Finalizado', acciones:'Acciones'
+    };
+    return map[key] || key;
+  }
+
+  function applyColumnVisibility(){
+    defaultCols.forEach(col=> setColVisible(col, activeCols.includes(col)) );
+  }
+
+  function setColVisible(col, show){
+    document.querySelectorAll('th[data-col="'+col+'"]').forEach(n=> n.style.display = show ? '' : 'none');
+    document.querySelectorAll('td[data-col="'+col+'"]').forEach(n=> n.style.display = show ? '' : 'none');
+  }
+
+  function toggleColumn(col, enabled){
+    const idx = activeCols.indexOf(col);
+    if(enabled && idx === -1) activeCols.push(col);
+    if(!enabled && idx !== -1) activeCols.splice(idx,1);
+    setColVisible(col, enabled);
+  }
+
+  function persistCols(){ localStorage.setItem(COLS_KEY, JSON.stringify(activeCols)); }
+
+  buildColMenu();
+  applyColumnVisibility();
+
+  colMenu?.querySelector('.colmenu-btn')?.addEventListener('click', ()=>{
+    colMenu.classList.toggle('open');
+  });
+  document.addEventListener('click', (e)=>{
+    if(!colMenu.contains(e.target)) colMenu.classList.remove('open');
+  });
+
+  /* ====== Oficina Técnica AJAX + snackbar ====== */
+  const snack = document.getElementById('snackbar');
+  function showSnack(text, ok=true){
+    if(!snack) return;
+    snack.textContent = text || 'Actualizado';
+    snack.style.background = ok ? '#0f172a' : '#8b1d1d';
+    snack.classList.add('show');
+    setTimeout(()=> snack.classList.remove('show'), 1600);
+  }
+
   const checkboxes = document.querySelectorAll('.oficina-tecnica-checkbox');
-  
   checkboxes.forEach(checkbox => {
     checkbox.addEventListener('change', function() {
       const expedienteId = this.dataset.expedienteId;
       const isChecked = this.checked;
-      
-      // Desactivar checkbox mientras se procesa
       this.disabled = true;
-      
+
       fetch(`/expedientes/${expedienteId}/oficina-tecnica`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          en_oficina_tecnica: isChecked 
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ en_oficina_tecnica: isChecked })
       })
-      .then(response => response.json())
+      .then(r => r.json())
       .then(data => {
         if (data.success) {
-          // Mostrar feedback visual temporal
-          const originalBg = this.parentElement.style.backgroundColor;
-          this.parentElement.style.backgroundColor = '#d4edda';
-          setTimeout(() => {
-            this.parentElement.style.backgroundColor = originalBg;
-          }, 1000);
+          showSnack('Oficina Técnica actualizada', true);
         } else {
-          // Revertir checkbox si hay error
           this.checked = !isChecked;
+          showSnack('Error al actualizar', false);
           alert('Error al actualizar el estado: ' + (data.error || 'Error desconocido'));
         }
       })
-      .catch(error => {
-        console.error('Error:', error);
-        // Revertir checkbox si hay error
+      .catch(err => {
+        console.error('Error:', err);
         this.checked = !isChecked;
+        showSnack('Error de conexión', false);
         alert('Error de conexión al actualizar el estado');
       })
-      .finally(() => {
-        // Reactivar checkbox
-        this.disabled = false;
-      });
+      .finally(() => this.disabled = false);
     });
   });
 });
 </script>
 
-<style>
-.oficina-tecnica-checkbox:checked {
-  background-color: #28a745;
-  border-color: #28a745;
-}
-
-.oficina-tecnica-checkbox:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>
-
 {% if items.pages > 1 %}
-<nav aria-label="Paginación">
-  <ul class="pagination">
+<nav aria-label="Paginación" class="mt-3">
+  <ul class="pagination justify-content-center">
     <li class="page-item {{ not items.has_prev and 'disabled' or '' }}">
       <a class="page-link" href="{{ url_for('lista_expedientes', q=q, formato=formato, page=items.prev_num) }}">Anterior</a>
     </li>
