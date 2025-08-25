@@ -1,204 +1,400 @@
 {% extends 'base.html' %}
 {% block title %}{{ 'Editar' if item else 'Nuevo' }} expediente — CPIM{% endblock %}
 {% block content %}
-<h3 class="mb-3">{{ 'Editar' if item else 'Nuevo' }} expediente</h3>
 
-<form method="post" enctype="multipart/form-data" class="row g-3">
-  <!-- Fecha -->
-  <div class="col-md-4">
-    <label class="form-label">Fecha</label>
-    <input
-      type="date"
-      name="fecha"
-      class="form-control"
-      value="{% if item and item.fecha %}{{ item.fecha.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
-  </div>
+<style>
+/* Paleta de colores personalizada basada en hsl(220,100%,X%) */
+:root {
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --primary-blue-10: hsl(220,100%,10%);
+}
 
-  <!-- Formato -->
-  <div class="col-md-4">
-    <label for="formato" class="form-label">Formato</label>
-    <select id="formato" name="formato" class="form-select" required>
-      {% set opciones = formatos if formatos else ['Papel','Digital'] %}
-      {% for op in opciones %}
-        {% if item %}
-          <option value="{{ op }}" {{ 'selected' if item.formato==op else '' }}>{{ op }}</option>
-        {% else %}
-          <option value="{{ op }}" {{ 'selected' if loop.first else '' }}>{{ op }}</option>
-        {% endif %}
-      {% endfor %}
-    </select>
-    <div class="form-text">Elegí "Digital" para habilitar carga de GOP y PDFs.</div>
-  </div>
+/* Contenedor principal con gradiente sutil */
+.modern-form-container {
+  background: linear-gradient(135deg, var(--primary-blue-80) 0%, #ffffff 100%);
+  min-height: 100vh;
+  padding: 2rem 0;
+}
 
-  <!-- N° copias -->
-  <div class="col-md-4">
-    <label class="form-label">N° de copias</label>
-    <input type="number" name="nro_copias" class="form-control" min="0"
-           value="{{ (item.nro_copias if item else '') or '' }}">
-  </div>
+/* Tarjeta principal del formulario */
+.form-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(69, 123, 255, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(69, 123, 255, 0.1);
+  padding: 3rem;
+  margin: 0 auto;
+  max-width: 1200px;
+}
 
-   <!-- Tipo de trabajo -->
-  <div class="col-md-6">
-    <label for="tipo_trabajo" class="form-label">Tipo de trabajo</label>
-    <select id="tipo_trabajo" name="tipo_trabajo" class="form-select" required>
-      <option value="">Seleccionar tipo de trabajo</option>
-      {% for tipo in tipos_trabajo %}
-        {% if item %}
-          <option value="{{ tipo }}" {{ 'selected' if item.tipo_trabajo == tipo else '' }}>{{ tipo }}</option>
-        {% else %}
-          <option value="{{ tipo }}">{{ tipo }}</option>
-        {% endif %}
-      {% endfor %}
-    </select>
-  </div>
+/* Título principal */
+.form-title {
+  color: var(--primary-blue-20);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 3rem;
+  position: relative;
+  font-size: 2.5rem;
+}
 
-  <!-- Profesional Principal -->
-  <div class="col-12">
-    <div class="card border-primary">
-      <div class="card-header bg-primary text-white">
-        <h6 class="mb-0">Profesional Principal</h6>
-      </div>
-      <div class="card-body">
+.form-title::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary-blue-50), var(--primary-blue-30));
+  border-radius: 2px;
+}
+
+/* Secciones del formulario */
+.form-section {
+  background: linear-gradient(135deg, var(--primary-blue-80) 0%, rgba(255, 255, 255, 0.8) 100%);
+  border: 1px solid var(--primary-blue-60);
+  border-radius: 15px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.form-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary-blue-50), var(--primary-blue-30));
+}
+
+.section-title {
+  color: var(--primary-blue-20);
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.section-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--primary-blue-50);
+  border-radius: 50%;
+}
+
+/* Campos del formulario */
+.form-label {
+  color: var(--primary-blue-20);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.form-control, .form-select {
+  border: 2px solid var(--primary-blue-70);
+  border-radius: 10px;
+  padding: 12px 16px;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary-blue-50);
+  box-shadow: 0 0 0 0.2rem rgba(69, 123, 255, 0.25);
+  background: white;
+}
+
+.form-control:hover, .form-select:hover {
+  border-color: var(--primary-blue-60);
+}
+
+/* Texto de ayuda */
+.form-text {
+  color: var(--primary-blue-30);
+  font-size: 0.9rem;
+  margin-top: 5px;
+}
+
+/* Botones modernos */
+.btn-modern-primary {
+  background: linear-gradient(135deg, var(--primary-blue-50), var(--primary-blue-40));
+  border: none;
+  color: white;
+  padding: 14px 30px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(69, 123, 255, 0.3);
+}
+
+.btn-modern-primary:hover {
+  background: linear-gradient(135deg, var(--primary-blue-40), var(--primary-blue-30));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(69, 123, 255, 0.4);
+  color: white;
+}
+
+.btn-modern-secondary {
+  background: linear-gradient(135deg, var(--primary-blue-70), var(--primary-blue-60));
+  border: none;
+  color: var(--primary-blue-20);
+  padding: 14px 30px;
+  font-weight: 600;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(69, 123, 255, 0.2);
+}
+
+.btn-modern-secondary:hover {
+  background: linear-gradient(135deg, var(--primary-blue-60), var(--primary-blue-50));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(69, 123, 255, 0.3);
+  color: white;
+}
+
+/* Botón de agregar profesional */
+.btn-outline-success {
+  background: linear-gradient(135deg, var(--primary-blue-60), var(--primary-blue-50));
+  border: 2px solid var(--primary-blue-50);
+  color: white;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-success:hover {
+  background: linear-gradient(135deg, var(--primary-blue-50), var(--primary-blue-40));
+  border-color: var(--primary-blue-40);
+  transform: translateY(-1px);
+  color: white;
+  box-shadow: 0 4px 15px rgba(69, 123, 255, 0.3);
+}
+
+/* Campos de profesionales adicionales */
+.additional-professional {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--primary-blue-60);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.remove-professional {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+  border: none;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  transition: all 0.3s ease;
+}
+
+.remove-professional:hover {
+  background: linear-gradient(135deg, #ee5a52, #dc3545);
+  transform: scale(1.05);
+}
+
+/* Sección digital especial */
+#digital-extra {
+  background: linear-gradient(135deg, rgba(69, 123, 255, 0.1), rgba(255, 255, 255, 0.9));
+  border: 2px dashed var(--primary-blue-60);
+  border-radius: 15px;
+  padding: 2rem;
+  position: relative;
+}
+
+#digital-extra::before {
+  content: '📱';
+  position: absolute;
+  top: -15px;
+  left: 20px;
+  background: white;
+  padding: 0 10px;
+  font-size: 1.5rem;
+}
+
+.digital-header {
+  color: var(--primary-blue-20);
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Autocompletado */
+.autocomplete-input {
+  position: relative;
+}
+
+.autocomplete-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid var(--primary-blue-60);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 8px 25px rgba(69, 123, 255, 0.2);
+}
+
+.autocomplete-suggestion {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--primary-blue-80);
+  transition: background-color 0.2s ease;
+}
+
+.autocomplete-suggestion:hover {
+  background: var(--primary-blue-80);
+  color: var(--primary-blue-20);
+}
+
+.autocomplete-suggestion:last-child {
+  border-bottom: none;
+}
+
+/* Separadores visuales */
+.form-separator {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary-blue-60), transparent);
+  border: none;
+  margin: 3rem 0;
+}
+
+/* Iconos de sección */
+.section-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--primary-blue-50), var(--primary-blue-40));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  margin-right: 15px;
+}
+
+/* Responsividad */
+@media (max-width: 768px) {
+  .form-card {
+    padding: 2rem 1rem;
+    margin: 1rem;
+    border-radius: 15px;
+  }
+  
+  .form-title {
+    font-size: 2rem;
+  }
+  
+  .form-section {
+    padding: 1.5rem;
+  }
+}
+</style>
+
+<div class="modern-form-container">
+  <div class="form-card">
+    <h3 class="form-title">{{ '✏️ Editar' if item else '📝 Nuevo' }} Expediente</h3>
+
+    <form method="post" enctype="multipart/form-data">
+      <!-- SECCIÓN: INFORMACIÓN BÁSICA -->
+      <div class="form-section">
+        <h5 class="section-title">
+          <div class="section-icon">📅</div>
+          Información Básica
+        </h5>
+        
         <div class="row g-3">
-          <div class="col-md-4">
-            <label class="form-label">Nombre del profesional</label>
-            <div class="position-relative">
-              <input 
-                type="text" 
-                name="nombre_profesional" 
-                id="nombre_profesional"
-                class="form-control autocomplete-input" 
-                required
-                autocomplete="off"
-                placeholder="Escribí el nombre..."
-                value="{{ (item.nombre_profesional if item else '') or '' }}">
-              <div id="profesional_suggestions" class="autocomplete-suggestions"></div>
-            </div>
+          <!-- Fecha -->
+          <div class="col-md-3">
+            <label class="form-label">📅 Fecha</label>
+            <input
+              type="date"
+              name="fecha"
+              class="form-control"
+              value="{% if item and item.fecha %}{{ item.fecha.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
           </div>
-          
-          <div class="col-md-4">
-            <label for="profesion" class="form-label">Profesión</label>
-            <select id="profesion" name="profesion" class="form-select" required>
-              {% for p in profesiones %}
+
+          <!-- Formato -->
+          <div class="col-md-3">
+            <label for="formato" class="form-label">💾 Formato</label>
+            <select id="formato" name="formato" class="form-select" required>
+              {% set opciones = formatos if formatos else ['Papel','Digital'] %}
+              {% for op in opciones %}
                 {% if item %}
-                  <option value="{{ p }}" {{ 'selected' if item.profesion == p else '' }}>{{ p }}</option>
+                  <option value="{{ op }}" {{ 'selected' if item.formato==op else '' }}>{{ op }}</option>
                 {% else %}
-                  <option value="{{ p }}" {{ 'selected' if loop.first else '' }}>{{ p }}</option>
+                  <option value="{{ op }}" {{ 'selected' if loop.first else '' }}>{{ op }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <div class="form-text">📱 Elegí "Digital" para habilitar carga de GOP y PDFs</div>
+          </div>
+
+          <!-- N° copias -->
+          <div class="col-md-3">
+            <label class="form-label">📄 N° de copias</label>
+            <input type="number" name="nro_copias" class="form-control" min="0"
+                   value="{{ (item.nro_copias if item else '') or '' }}">
+          </div>
+
+          <!-- Tipo de trabajo -->
+          <div class="col-md-3">
+            <label for="tipo_trabajo" class="form-label">🔧 Tipo de trabajo</label>
+            <select id="tipo_trabajo" name="tipo_trabajo" class="form-select" required>
+              <option value="">Seleccionar tipo de trabajo</option>
+              {% for tipo in tipos_trabajo %}
+                {% if item %}
+                  <option value="{{ tipo }}" {{ 'selected' if item.tipo_trabajo == tipo else '' }}>{{ tipo }}</option>
+                {% else %}
+                  <option value="{{ tipo }}">{{ tipo }}</option>
                 {% endif %}
               {% endfor %}
             </select>
           </div>
-          
-          <div class="col-md-4">
-            <label class="form-label">WhatsApp</label>
-            <input type="text" name="whatsapp_profesional" class="form-control"
-                   value="{{ (item.whatsapp_profesional if item else '') or '' }}">
-          </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Profesionales Adicionales -->
-  <div class="col-12">
-    <div class="card border-info">
-      <div class="card-header bg-light">
-        <h6 class="mb-0">Profesionales Adicionales</h6>
-        <small class="text-muted">Si hay más de un profesional involucrado en este expediente</small>
-      </div>
-      <div class="card-body">
-        <div id="profesionales-adicionales">
-          {% if item and item.profesionales_adicionales %}
-            {% for prof_adic in item.profesionales_adicionales %}
-            <div class="row g-2 mb-2 profesional-adicional-item">
-              <div class="col-md-6">
-                <div class="position-relative">
-                  <input 
-                    type="text" 
-                    name="profesionales_adicionales_nombre[]" 
-                    class="form-control autocomplete-input" 
-                    placeholder="Nombre del profesional"
-                    autocomplete="off"
-                    value="{{ prof_adic.nombre_profesional }}">
-                  <div class="autocomplete-suggestions"></div>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <select name="profesionales_adicionales_profesion[]" class="form-select">
-                  <option value="">Seleccionar profesión</option>
-                  {% for p in profesiones %}
-                    <option value="{{ p }}" {{ 'selected' if prof_adic.profesion == p else '' }}>{{ p }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="col-md-2">
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
-                  Eliminar
-                </button>
-              </div>
-            </div>
-            {% endfor %}
-          {% endif %}
-        </div>
-        
-        <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarProfesional()">
-          + Agregar Profesional
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Comitente -->
-  <div class="col-md-6">
-    <label class="form-label">Nombre comitente</label>
-    <div class="position-relative">
-      <input 
-        type="text" 
-        name="nombre_comitente" 
-        id="nombre_comitente"
-        class="form-control autocomplete-input"
-        autocomplete="off"
-        placeholder="Escribí el nombre del comitente..."
-        value="{{ (item.nombre_comitente if item else '') or '' }}">
-      <div id="comitente_suggestions" class="autocomplete-suggestions"></div>
-    </div>
-  </div>
-
-  <!-- Ubicación -->
-  <div class="col-md-6">
-    <label class="form-label">Ubicación</label>
-    <input type="text" name="ubicacion" class="form-control"
-           value="{{ (item.ubicacion if item else '') or '' }}">
-  </div>
-
-  <div class="col-md-6">
-    <label class="form-label">Partida Inmobiliaria</label>
-    <input type="text" name="partida_inmobiliaria" class="form-control"
-           value="{{ item.partida_inmobiliaria if item }}">
-  </div>
-
-  <div class="col-md-6">
-    <label for="nro_expediente_municipal" class="form-label">Número de Expediente Municipal</label>
-    <input type="text" class="form-control" id="nro_expediente_municipal" name="nro_expediente_municipal"
-          value="{{ item.nro_expediente_municipal or '' }}">
-  </div>
-
-  <!-- ===== Bloque para Formato Digital (MOVIDO AQUÍ) ===== -->
-  <div id="digital-extra" class="col-12" style="display:none;">
-    <div class="card border-success">
-      <div class="card-header bg-success text-white">
-        <h6 class="mb-0">Datos para trabajos digitales</h6>
-      </div>
-      <div class="card-body">
+      <!-- SECCIÓN ESPECIAL PARA FORMATO DIGITAL -->
+      <div id="digital-extra" class="col-12" style="display:none;">
+        <h6 class="digital-header">
+          📱 Datos para trabajos digitales
+        </h6>
         <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label">Número de GOP</label>
+            <label class="form-label">🔢 Número de GOP</label>
             <input type="text" name="gop_numero" class="form-control"
+                   placeholder="GOP-XXXX-XXXX"
                    value="{{ (item.gop_numero if item else '') or '' }}">
           </div>
 
           <div class="col-md-6">
-            <label class="form-label">Archivos PDF</label>
+            <label class="form-label">📄 Archivos PDF</label>
             <input type="file" name="pdfs" class="form-control" accept="application/pdf" multiple>
             <div class="form-text">Podés adjuntar uno o varios archivos .pdf</div>
           </div>
@@ -206,7 +402,7 @@
 
         {% if item and item.archivos %}
           <div class="mt-3">
-            <strong>PDFs ya cargados:</strong>
+            <strong>📎 PDFs ya cargados:</strong>
             <ul class="mb-0">
               {% for a in item.archivos %}
                 <li>
@@ -224,396 +420,474 @@
           </div>
         {% endif %}
       </div>
-    </div>
+
+      <!-- SEPARADOR VISUAL -->
+      <hr class="form-separator">
+
+      <!-- SECCIÓN: PROFESIONALES -->
+      <div class="form-section">
+        <h5 class="section-title">
+          <div class="section-icon">👥</div>
+          Profesionales
+        </h5>
+        
+        <div class="row g-3">
+          <!-- Profesional Principal -->
+          <div class="col-md-6">
+            <label class="form-label">👨‍💼 Nombre del profesional principal</label>
+            <div class="position-relative">
+              <input 
+                type="text" 
+                name="nombre_profesional" 
+                id="nombre_profesional"
+                class="form-control autocomplete-input"
+                autocomplete="off"
+                placeholder="Escribí el nombre del profesional..."
+                value="{{ (item.nombre_profesional if item else '') or '' }}"
+                required>
+              <div id="profesional_suggestions" class="autocomplete-suggestions"></div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label for="profesion" class="form-label">🎓 Profesión</label>
+            <select id="profesion" name="profesion" class="form-select" required>
+              {% for p in profesiones %}
+                {% if item %}
+                  <option value="{{ p }}" {{ 'selected' if item.profesion == p else '' }}>{{ p }}</option>
+                {% else %}
+                  <option value="{{ p }}" {{ 'selected' if loop.first else '' }}>{{ p }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Profesionales Adicionales -->
+          <div class="col-12">
+            <label class="form-label">👥 Profesionales adicionales</label>
+            <div id="profesionales-adicionales">
+              {% if item and item.profesionales_adicionales %}
+                {% for prof in item.profesionales_adicionales %}
+                  <div class="additional-professional">
+                    <button type="button" class="remove-professional" onclick="eliminarProfesional(this)">✕</button>
+                    <div class="row g-2">
+                      <div class="col-md-6">
+                        <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
+                               placeholder="Nombre del profesional" value="{{ prof.nombre_profesional }}" autocomplete="off">
+                      </div>
+                      <div class="col-md-6">
+                        <select name="profesionales_adicionales_profesion[]" class="form-select">
+                          <option value="">Seleccionar profesión</option>
+                          {% for p in profesiones %}
+                            <option value="{{ p }}" {{ 'selected' if prof.profesion == p else '' }}>{{ p }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            </div>
+            
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarProfesional()">
+              ➕ Agregar Profesional
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN: PROFESIONALES -->
+      <div class="form-section">
+        <h5 class="section-title">
+          <div class="section-icon">👥</div>
+          Datos del Trabajo
+        </h5>
+        <div class="row g-3">
+          <!-- Comitente -->
+          <div class="col-md-6">
+            <label class="form-label">🏢 Nombre comitente</label>
+            <div class="position-relative">
+              <input 
+                type="text" 
+                name="nombre_comitente" 
+                id="nombre_comitente"
+                class="form-control autocomplete-input"
+                autocomplete="off"
+                placeholder="Escribí el nombre del comitente..."
+                value="{{ (item.nombre_comitente if item else '') or '' }}">
+              <div id="comitente_suggestions" class="autocomplete-suggestions"></div>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">📍 Ubicación</label>
+            <input type="text" name="ubicacion" class="form-control" 
+                   placeholder="Dirección completa..."
+                   value="{{ (item.ubicacion if item else '') or '' }}">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">🏠 Partida Inmobiliaria</label>
+            <input type="text" name="partida_inmobiliaria" class="form-control"
+                   placeholder="Número de partida..."
+                   value="{{ item.partida_inmobiliaria if item }}">
+          </div>
+
+          <div class="col-md-6">
+            <label for="nro_expediente_municipal" class="form-label">🏛️ Número de Expediente Municipal</label>
+            <input type="text" class="form-control" id="nro_expediente_municipal" name="nro_expediente_municipal"
+                  placeholder="Número municipal..."
+                  value="{{ item.nro_expediente_municipal or '' }}">
+          </div>
+        </div>
+      </div>
+      
+
+      <!-- SEPARADOR VISUAL -->
+      <hr class="form-separator">
+
+      <!-- SECCIÓN: DATOS ADMINISTRATIVOS -->
+      <div class="form-section">
+        <h5 class="section-title">
+          <div class="section-icon">📋</div>
+          Datos Administrativos
+        </h5>
+        
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">🏢 N° Expediente CPIM</label>
+            <input type="text" name="nro_expediente_cpim" class="form-control"
+                   placeholder="Número CPIM..."
+                   value="{{ (item.nro_expediente_cpim if item else '') or '' }}">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">👤 Persona que retira</label>
+            <input type="text" name="persona_retira" class="form-control"
+                   placeholder="Nombre completo..."
+                   value="{{ (item.persona_retira if item else '') or '' }}">
+          </div>
+          
+          <div class="col-md-4">
+            <label class="form-label">📦 N° de caja</label>
+            <input type="number" name="nro_caja" class="form-control" min="0"
+                   placeholder="Número de caja..."
+                   value="{{ (item.nro_caja if item else '') or '' }}">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">📅 Fecha de salida</label>
+            <input
+              type="date"
+              name="fecha_salida"
+              class="form-control"
+              value="{% if item and item.fecha_salida %}{{ item.fecha_salida.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
+          </div>
+        </div>
+      </div>
+
+      
+
+      <!-- SEPARADOR VISUAL -->
+      <hr class="form-separator">
+
+      <!-- SECCIÓN: TASAS -->
+      <div class="form-section">
+        <h5 class="section-title">
+          <div class="section-icon">💰</div>
+          Tasas y Pagos
+        </h5>
+        
+        <div class="row g-3">
+          <div class="col-md-12">
+            <label class="form-label">💰 Tasa de sellado (ARS)</label>
+            <input type="text" name="tasa_sellado_monto" class="form-control" inputmode="decimal"
+                  placeholder="$ 0,00" value="{{ item.tasa_sellado_monto|ars if item and item.tasa_sellado_monto }}">
+            <div class="form-text">Ingresá el monto</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">💡 Tasa visado eléctrica (ARS)</label>
+            <input type="text" name="tasa_visado_electrica_monto" class="form-control" inputmode="decimal"
+                  placeholder="$ 0,00" value="{{ item.tasa_visado_electrica_monto|ars if item and item.tasa_visado_electrica_monto }}">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">🚿 Tasa visado salubridad (ARS)</label>
+            <input type="text" name="tasa_visado_salubridad_monto" class="form-control" inputmode="decimal"
+                  placeholder="$ 0,00" value="{{ item.tasa_visado_salubridad_monto|ars if item and item.tasa_visado_salubridad_monto }}">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">⚙️ Tasa visado electrom. (ARS)</label>
+            <input type="text" name="tasa_visado_electromecanica_monto" class="form-control" inputmode="decimal"
+                  placeholder="$ 0,00" value="{{ item.tasa_visado_electromecanica_monto|ars if item and item.tasa_visado_electromecanica_monto }}">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">🔥 Tasa visado gas (ARS)</label>
+            <input type="text" name="tasa_visado_gas_monto" class="form-control" inputmode="decimal"
+                  placeholder="$ 0,00" value="{{ item.tasa_visado_gas_monto|ars if item and item.tasa_visado_gas_monto }}">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">📄 Estado pago sellado</label>
+            <select name="estado_pago_sellado" class="form-select" required>
+              {% set opts = estados or ['pendiente','pagado','exento'] %}
+              {% set val = (item.estado_pago_sellado if item and item.estado_pago_sellado else 'pendiente') %}
+              {% for o in opts %}
+                <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">✅ Estado pago visado</label>
+            <select name="estado_pago_visado" class="form-select" required>
+              {% set opts = estados or ['pendiente','pagado','exento'] %}
+              {% set val = (item.estado_pago_visado if item and item.estado_pago_visado else 'pendiente') %}
+              {% for o in opts %}
+                <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTONES DE ACCIÓN -->
+      <div class="text-center mt-4">
+        <button class="btn-modern-primary me-3" type="submit">
+          💾 Guardar Expediente
+        </button>
+        <a class="btn-modern-secondary" href="{{ url_for('lista_expedientes') }}">
+          ❌ Cancelar
+        </a>
+      </div>
+    </form>
   </div>
-
-  <!-- ===== Tasas (monto en ARS) ===== -->
-  <div class="col-12"><hr class="mt-4"></div>
-  <h5 class="mb-2">Tasas</h5>
-
-  <div class="col-md-3">
-    <label class="form-label">Tasa de sellado (ARS)</label>
-    <input type="text" name="tasa_sellado_monto" class="form-control" inputmode="decimal"
-          placeholder="$ 0,00" value="{{ item.tasa_sellado_monto|ars if item and item.tasa_sellado_monto }}">
-    <div class="form-text">Ingresá el monto. Acepta 1234.56 o 1.234,56</div>
-  </div>
-
-  <div class="col-md-3">
-    <label class="form-label">Visado Eléctrica (ARS)</label>
-    <input type="text" name="tasa_visado_electrica_monto" class="form-control" inputmode="decimal"
-          placeholder="$ 0,00" value="{{ item.tasa_visado_electrica_monto|ars if item and item.tasa_visado_electrica_monto }}">
-  </div>
-
-  <div class="col-md-3">
-    <label class="form-label">Visado Salubridad (ARS)</label>
-    <input type="text" name="tasa_visado_salubridad_monto" class="form-control" inputmode="decimal"
-          placeholder="$ 0,00" value="{{ item.tasa_visado_salubridad_monto|ars if item and item.tasa_visado_salubridad_monto }}">
-  </div>
-
-  <div class="col-md-3">
-    <label class="form-label">Visado Gas (ARS)</label>
-    <input type="text" name="tasa_visado_gas_monto" class="form-control" inputmode="decimal"
-          placeholder="$ 0,00" value="{{ item.tasa_visado_gas_monto|ars if item and item.tasa_visado_gas_monto }}">
-  </div>
-
-  <div class="col-md-3">
-    <label class="form-label">Visado Electromecánica (ARS)</label>
-    <input type="text" name="tasa_visado_electromecanica_monto" class="form-control" inputmode="decimal"
-          placeholder="$ 0,00" value="{{ item.tasa_visado_electromecanica_monto|ars if item and item.tasa_visado_electromecanica_monto }}">
-  </div>
-  <!-- ===== Fin Tasas ===== -->
-
-  <!-- Estados de pago -->
-  <div class="col-md-6">
-    <label class="form-label">Estado pago sellado</label>
-    <select name="estado_pago_sellado" class="form-select" required>
-      {% set opts = estados or ['pendiente','pagado','exento'] %}
-      {% set val = (item.estado_pago_sellado if item and item.estado_pago_sellado else 'pendiente') %}
-      {% for o in opts %}
-        <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <div class="col-md-6">
-    <label class="form-label">Estado pago visado</label>
-    <select name="estado_pago_visado" class="form-select" required>
-      {% set opts = estados or ['pendiente','pagado','exento'] %}
-      {% set val = (item.estado_pago_visado if item and item.estado_pago_visado else 'pendiente') %}
-      {% for o in opts %}
-        <option value="{{ o }}" {{ 'selected' if val==o else '' }}>{{ o|capitalize }}</option>
-      {% endfor %}
-    </select>
-  </div>
-
-  <!-- Salida -->
-  <div class="col-md-4">
-    <label class="form-label">Fecha de salida</label>
-    <input
-      type="date"
-      name="fecha_salida"
-      class="form-control"
-      value="{% if item and item.fecha_salida %}{{ item.fecha_salida.strftime('%Y-%m-%d') }}{% else %}{% endif %}">
-  </div>
-
-  <!-- N° CPIM -->
-  <div class="col-md-3">
-    <label class="form-label">N° Expediente CPIM</label>
-    <input type="text" name="nro_expediente_cpim" class="form-control"
-           value="{{ (item.nro_expediente_cpim if item else '') or '' }}">
-  </div>
-
-  <div class="col-md-4">
-    <label class="form-label">Persona que retira</label>
-    <input type="text" name="persona_retira" class="form-control"
-           value="{{ (item.persona_retira if item else '') or '' }}">
-  </div>
-  <div class="col-md-4">
-    <label class="form-label">N° de caja</label>
-    <input type="number" name="nro_caja" class="form-control" min="0"
-           value="{{ (item.nro_caja if item else '') or '' }}">
-  </div>
-
-  <!-- Botones -->
-  <div class="col-12">
-    <button class="btn btn-primary" type="submit">Guardar</button>
-    <a class="btn btn-secondary" href="{{ url_for('lista_expedientes') }}">Cancelar</a>
-  </div>
-</form>
-
-<!-- CSS para el autocompletado -->
-<style>
-.autocomplete-suggestions {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #ddd;
-  border-top: none;
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 1000;
-  display: none;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.autocomplete-suggestion {
-  padding: 8px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #eee;
-}
-
-.autocomplete-suggestion:hover {
-  background-color: #f8f9fa;
-}
-
-.autocomplete-suggestion.active {
-  background-color: #007bff;
-  color: white;
-}
-
-.autocomplete-suggestion:last-child {
-  border-bottom: none;
-}
-</style>
+</div>
 
 <script>
-// Variables globales para las listas de autocompletado
-let profesionalesList = [];
-let comitentsList = [];
+document.addEventListener('DOMContentLoaded', function () {
+  // --- Toggle de sección digital ---
+  const formatoSelect = document.getElementById('formato');
+  const digitalExtra = document.getElementById('digital-extra');
 
-// Cargar datos de autocompletado al inicializar la página
-document.addEventListener('DOMContentLoaded', function() {
-  // Cargar profesionales
-  fetch('/api/profesionales')
-    .then(response => response.json())
-    .then(data => {
-      profesionalesList = data;
-    })
-    .catch(error => console.log('Error cargando profesionales:', error));
-
-  // Cargar comitentes  
-  fetch('/api/comitentes')
-    .then(response => response.json())
-    .then(data => {
-      comitentsList = data;
-    })
-    .catch(error => console.log('Error cargando comitentes:', error));
-
-  // Configurar autocompletado para campos existentes
-  setupAutocomplete('nombre_profesional', 'profesional_suggestions', profesionalesList);
-  setupAutocomplete('nombre_comitente', 'comitente_suggestions', comitentsList);
-});
-
-// Función principal de autocompletado
-function setupAutocomplete(inputId, suggestionsId, dataList) {
-  const input = document.getElementById(inputId);
-  const suggestions = document.getElementById(suggestionsId);
-  
-  if (!input || !suggestions) return;
-  
-  let currentFocus = -1;
-  
-  input.addEventListener('input', function() {
-    const value = this.value.toLowerCase();
-    suggestions.innerHTML = '';
-    currentFocus = -1;
-    
-    if (value.length < 2) {
-      suggestions.style.display = 'none';
-      return;
-    }
-    
-    // Filtrar datos que tengan referencia a la lista actual
-    const currentList = inputId.includes('profesional') ? profesionalesList : comitentsList;
-    const filtered = currentList.filter(item => 
-      item.toLowerCase().includes(value)
-    ).slice(0, 10); // Mostrar máximo 10 sugerencias
-    
-    if (filtered.length === 0) {
-      suggestions.style.display = 'none';
-      return;
-    }
-    
-    filtered.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'autocomplete-suggestion';
-      div.textContent = item;
-      div.addEventListener('click', function() {
-        input.value = item;
-        suggestions.style.display = 'none';
-        input.focus();
-      });
-      suggestions.appendChild(div);
-    });
-    
-    suggestions.style.display = 'block';
-  });
-  
-  // Navegación con teclado
-  input.addEventListener('keydown', function(e) {
-    const suggestionItems = suggestions.querySelectorAll('.autocomplete-suggestion');
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      currentFocus++;
-      if (currentFocus >= suggestionItems.length) currentFocus = 0;
-      setActive(suggestionItems);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      currentFocus--;
-      if (currentFocus < 0) currentFocus = suggestionItems.length - 1;
-      setActive(suggestionItems);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (currentFocus > -1 && suggestionItems[currentFocus]) {
-        suggestionItems[currentFocus].click();
-      }
-    } else if (e.key === 'Escape') {
-      suggestions.style.display = 'none';
-      currentFocus = -1;
-    }
-  });
-  
-  function setActive(items) {
-    items.forEach(item => item.classList.remove('active'));
-    if (items[currentFocus]) {
-      items[currentFocus].classList.add('active');
-    }
+  function actualizarDigitalExtra() {
+    if (!formatoSelect || !digitalExtra) return;
+    digitalExtra.style.display = (formatoSelect.value === 'Digital') ? 'block' : 'none';
   }
-  
-  // Cerrar sugerencias al hacer click fuera
-  document.addEventListener('click', function(e) {
-    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
-      suggestions.style.display = 'none';
-    }
-  });
-}
 
-// Configurar autocompletado para inputs dinámicos de profesionales adicionales
-function setupAutocompleteForElement(input) {
-  if (!input || input.hasAttribute('data-autocomplete-setup')) return;
-  input.setAttribute('data-autocomplete-setup', 'true');
-  
-  let suggestions = input.nextElementSibling;
-  if (!suggestions || !suggestions.classList.contains('autocomplete-suggestions')) {
-    return;
+  if (formatoSelect) {
+    formatoSelect.addEventListener('change', actualizarDigitalExtra);
+    actualizarDigitalExtra(); // estado inicial
   }
-  
-  let currentFocus = -1;
-  
-  input.addEventListener('input', function() {
-    const value = this.value.toLowerCase();
-    suggestions.innerHTML = '';
-    currentFocus = -1;
-    
-    if (value.length < 2) {
-      suggestions.style.display = 'none';
-      return;
-    }
-    
-    const filtered = profesionalesList.filter(item => 
-      item.toLowerCase().includes(value)
-    ).slice(0, 10);
-    
-    if (filtered.length === 0) {
-      suggestions.style.display = 'none';
-      return;
-    }
-    
-    filtered.forEach(item => {
-      const div = document.createElement('div');
-      div.className = 'autocomplete-suggestion';
-      div.textContent = item;
-      div.addEventListener('click', function() {
-        input.value = item;
-        suggestions.style.display = 'none';
-        input.focus();
-      });
-      suggestions.appendChild(div);
-    });
-    
-    suggestions.style.display = 'block';
-  });
-  
-  // Navegación con teclado (igual que antes)
-  input.addEventListener('keydown', function(e) {
-    const suggestionItems = suggestions.querySelectorAll('.autocomplete-suggestion');
-    
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      currentFocus++;
-      if (currentFocus >= suggestionItems.length) currentFocus = 0;
-      setActive(suggestionItems);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      currentFocus--;
-      if (currentFocus < 0) currentFocus = suggestionItems.length - 1;
-      setActive(suggestionItems);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (currentFocus > -1 && suggestionItems[currentFocus]) {
-        suggestionItems[currentFocus].click();
-      }
-    } else if (e.key === 'Escape') {
-      suggestions.style.display = 'none';
-      currentFocus = -1;
-    }
-  });
-  
-  function setActive(items) {
-    items.forEach(item => item.classList.remove('active'));
-    if (items[currentFocus]) {
-      items[currentFocus].classList.add('active');
-    }
-  }
-  
-  document.addEventListener('click', function(e) {
-    if (!input.contains(e.target) && !suggestions.contains(e.target)) {
-      suggestions.style.display = 'none';
-    }
-  });
-}
 
-// Funciones para profesionales adicionales (actualizadas)
-function agregarProfesional() {
-  const container = document.getElementById('profesionales-adicionales');
-  const div = document.createElement('div');
-  div.className = 'row g-2 mb-2 profesional-adicional-item';
-  div.innerHTML = `
-    <div class="col-md-6">
-      <div class="position-relative">
-        <input 
-          type="text" 
-          name="profesionales_adicionales_nombre[]" 
-          class="form-control autocomplete-input" 
-          placeholder="Nombre del profesional"
-          autocomplete="off">
-        <div class="autocomplete-suggestions"></div>
+  // --- Agregar / Eliminar profesionales adicionales ---
+  window.agregarProfesional = function () {
+    const container = document.getElementById('profesionales-adicionales');
+    if (!container) return;
+
+    const profesionalDiv = document.createElement('div');
+    profesionalDiv.className = 'additional-professional';
+    profesionalDiv.style.opacity = '0';
+    profesionalDiv.style.transform = 'translateY(-10px)';
+
+    profesionalDiv.innerHTML = `
+      <button type="button" class="remove-professional" onclick="eliminarProfesional(this)">✕</button>
+      <div class="row g-2">
+        <div class="col-md-6">
+          <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
+                 placeholder="Nombre del profesional" autocomplete="off">
+        </div>
+        <div class="col-md-6">
+          <select name="profesionales_adicionales_profesion[]" class="form-select">
+            <option value="">Seleccionar profesión</option>
+            {% for p in profesiones %}
+              <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
-    </div>
-    <div class="col-md-4">
-      <select name="profesionales_adicionales_profesion[]" class="form-select">
-        <option value="">Seleccionar profesión</option>
-        {% for p in profesiones %}
-        <option value="{{ p }}">{{ p }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2">
-      <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarProfesional(this)">
-        Eliminar
-      </button>
-    </div>
+    `;
+
+    container.appendChild(profesionalDiv);
+
+    // Animación de aparición
+    requestAnimationFrame(() => {
+      profesionalDiv.style.transition = 'all 0.3s ease';
+      profesionalDiv.style.opacity = '1';
+      profesionalDiv.style.transform = 'translateY(0)';
+    });
+  };
+
+  window.eliminarProfesional = function (button) {
+    const profesionalDiv = button.closest('.additional-professional');
+    if (!profesionalDiv) return;
+    profesionalDiv.style.transition = 'all 0.3s ease';
+    profesionalDiv.style.opacity = '0';
+    profesionalDiv.style.transform = 'translateY(-10px)';
+    setTimeout(() => profesionalDiv.remove(), 300);
+  };
+
+  // --- Autocompletado simple con caché local ---
+  let profesionalCache = [
+    'Juan Carlos Rodriguez',
+    'María Elena Gonzalez',
+    'Roberto Miguel Silva',
+    'Ana Patricia Mendez',
+    'Carlos Eduardo López'
+  ];
+  let comitenteCache = [
+    'Construcciones ABC S.A.',
+    'Inmobiliaria Norte Ltda.',
+    'Desarrollo Urbano S.R.L.',
+    'José María Gutierrez',
+    'Emprendimientos del Sur'
+  ];
+
+  function setupAutocomplete(inputId, suggestionsId, cacheArray) {
+    const input = document.getElementById(inputId);
+    const suggestions = document.getElementById(suggestionsId);
+    if (!input || !suggestions) return;
+
+    function showSuggestions(matches) {
+      suggestions.innerHTML = '';
+      matches.forEach(match => {
+        const div = document.createElement('div');
+        div.className = 'autocomplete-suggestion';
+        div.textContent = match;
+        div.addEventListener('click', function () {
+          input.value = match;
+          suggestions.style.display = 'none';
+        });
+        suggestions.appendChild(div);
+      });
+      suggestions.style.display = 'block';
+    }
+
+    input.addEventListener('input', function () {
+      const query = this.value.trim();
+      if (query.length < 2) {
+        suggestions.style.display = 'none';
+        return;
+      }
+      const matches = cacheArray
+        .filter(item => item.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 5);
+      if (matches.length) showSuggestions(matches);
+      else suggestions.style.display = 'none';
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!input.contains(e.target) && !suggestions.contains(e.target)) {
+        suggestions.style.display = 'none';
+      }
+    });
+  }
+
+  setupAutocomplete('nombre_profesional', 'profesional_suggestions', profesionalCache);
+  setupAutocomplete('nombre_comitente', 'comitente_suggestions', comitenteCache);
+
+  // --- Formateo automático de montos en ARS (corregido) ---
+  const montoInputs = document.querySelectorAll('input[name$="_monto"]');
+  montoInputs.forEach(input => {
+    input.addEventListener('input', function () {
+      // Permitimos dígitos, puntos y comas; eliminamos cualquier otra cosa
+      let value = this.value.replace(/[^\d.,]/g, '');
+      // Si no empieza con $, lo anteponemos (sin romper mientras el usuario escribe)
+      if (value && !this.value.trim().startsWith('$')) {
+        this.value = '$ ' + value;
+      } else {
+        this.value = (this.value.trim().startsWith('$') ? '$ ' : '') + value;
+      }
+    });
+
+    input.addEventListener('blur', function () {
+      let value = this.value.replace(/[^\d.,]/g, '');
+      if (!value) {
+        this.value = '';
+        return;
+      }
+      // Si no tiene decimales con coma, agregamos ,00 al final
+      if (!/,\d{1,2}$/.test(value)) {
+        value = value.replace(/[.,]$/, ''); // evitar coma/punto final suelto
+        value = value + ',00';
+      }
+      this.value = '$ ' + value;
+    });
+  });
+
+  // --- Validación visual del formulario ---
+  const form = document.querySelector('form');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      const requiredFields = this.querySelectorAll('[required]');
+      let hasError = false;
+
+      requiredFields.forEach(field => {
+        if (!field.value || !field.value.trim()) {
+          field.style.borderColor = '#ff6b6b';
+          field.style.boxShadow = '0 0 0 0.2rem rgba(255, 107, 107, 0.25)';
+          hasError = true;
+
+          field.addEventListener('input', function onInput() {
+            if (this.value.trim()) {
+              this.style.borderColor = '';
+              this.style.boxShadow = '';
+              this.removeEventListener('input', onInput);
+            }
+          });
+        }
+      });
+
+      if (hasError) {
+        e.preventDefault();
+        const firstError = this.querySelector('[required]:invalid, [style*="rgb(255, 107, 107)"]');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          firstError.focus();
+        }
+
+        const errorMsg = document.createElement('div');
+        errorMsg.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+          color: white;
+          padding: 15px 25px;
+          border-radius: 10px;
+          box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+          z-index: 10000;
+          font-weight: 600;
+          animation: slideInRight 0.3s ease;
+        `;
+        errorMsg.textContent = '❌ Por favor completá todos los campos obligatorios';
+        document.body.appendChild(errorMsg);
+
+        setTimeout(() => {
+          errorMsg.style.animation = 'slideOutRight 0.3s ease';
+          setTimeout(() => errorMsg.remove(), 300);
+        }, 3000);
+      }
+    });
+  }
+
+  // --- Animaciones (las agrega una sola vez) ---
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
   `;
-  container.appendChild(div);
-  
-  // Configurar autocompletado para el nuevo input
-  const newInput = div.querySelector('.autocomplete-input');
-  setupAutocompleteForElement(newInput);
-}
-
-function eliminarProfesional(button) {
-  const item = button.closest('.profesional-adicional-item');
-  item.remove();
-}
-
-// Función para mostrar/ocultar campos digitales
-function toggleDigital() {
-  const sel = document.getElementById('formato');
-  const box = document.getElementById('digital-extra');
-  if (!sel || !box) return;
-  box.style.display = (sel.value === 'Digital') ? '' : 'none';
-}
-
-// Configurar eventos al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
-  toggleDigital();
-  document.getElementById('formato').addEventListener('change', toggleDigital);
-  
-  // Configurar autocompletado para inputs existentes de profesionales adicionales
-  document.querySelectorAll('.autocomplete-input').forEach(setupAutocompleteForElement);
+  document.head.appendChild(style);
 });
 </script>
+
 {% endblock %}
