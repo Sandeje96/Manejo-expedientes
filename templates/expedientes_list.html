@@ -21,7 +21,7 @@
       class="form-control"
       type="search"
       name="q"
-      placeholder="Buscar (N°, profesional, comitente, tipo, ubicación)"
+      placeholder="Buscar (N° CPIM, N° GOP, profesional, comitente)"
       value="{{ q or '' }}">
   </div>
 
@@ -284,12 +284,15 @@
       <td class="text-end">
         {% if it.finalizado %}
           <span class="badge bg-success me-2">Finalizado</span>
+          <!-- Solo botón VER para expedientes finalizados -->
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
           <form action="{{ url_for('reactivar_expediente', item_id=it.id) }}" method="post" class="d-inline">
             <button class="btn btn-sm btn-outline-warning" type="submit" title="Reactivar expediente">
               🔄 Reactivar
             </button>
           </form>
         {% else %}
+          <!-- Botones completos para expedientes activos -->
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
           <form action="{{ url_for('finalizar_expediente', item_id=it.id) }}" method="post" class="d-inline">

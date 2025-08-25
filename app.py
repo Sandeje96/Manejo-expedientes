@@ -549,17 +549,16 @@ def create_app():
             query = query.filter(
                 or_(
                     Expediente.nro_expediente_cpim.ilike(like),
+                    Expediente.gop_numero.ilike(like),  # ← NUEVA LÍNEA
                     Expediente.nombre_profesional.ilike(like),
                     Expediente.nombre_comitente.ilike(like),
-                    Expediente.tipo_trabajo.ilike(like),
-                    Expediente.ubicacion.ilike(like),
                 )
             )
         if formato_f in FORMATO_PERMITIDOS:
             query = query.filter(Expediente.formato == formato_f)
         else:
             formato_f = ""
-        items = query.order_by(Expediente.created_at.desc()).paginate(page=page, per_page=20)
+        items = query.order_by(Expediente.finalizado.asc(), Expediente.created_at.desc()).paginate(page=page, per_page=20)
         return render_template("expedientes_list.html", items=items, q=q, formato=formato_f)
 
     @app.get("/expedientes/nuevo")
