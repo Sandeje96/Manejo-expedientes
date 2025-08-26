@@ -9,11 +9,21 @@ from flask_migrate import Migrate
 from sqlalchemy import or_
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 
 # Extensiones globales
 _db = SQLAlchemy()
 _migrate = Migrate()
+login_manager = LoginManager()
+
+def init_login_manager(app):
+    """Inicializa Flask-Login"""
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'
+    login_manager.login_message = 'Necesitas iniciar sesión para acceder a esta página.'
+    login_manager.login_message_category = 'info'
 
 
 def _normalize_db_url(url: str) -> str:
@@ -56,6 +66,7 @@ def create_app():
 
     _db.init_app(app)
     _migrate.init_app(app, _db)
+    init_login_manager(app)
 
     # === Filtro Jinja para formatear moneda ARS ===
     @app.template_filter("ars")
@@ -526,6 +537,51 @@ def create_app():
         
         def __repr__(self):
             return f"<CierreTasas {self.id} - {self.nombre_cierre} ({self.fecha_desde} a {self.fecha_hasta})>"
+        
+    class Usuario(_db.Model, UserMixin):
+        """Modelo para usuarios del sistema"""
+        __tablename__ = "usuarios"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        username = _db.Column(_db.String(80), unique=True, nullable=False)
+        email = _db.Column(_db.String(120), unique=True, nullable=False)
+        password_hash = _db.Column(_db.String(255), nullable=False)
+        nombre_completo = _db.Column(_db.String(200), nullable=True)
+        activo = _db.Column(_db.Boolean, default=True, nullable=False)
+        es_admin = _db.Column(_db.Boolean, default=False, nullable=False)
+        ultimo_login = _db.Column(_db.DateTime, nullable=True)
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        def set_password(self, password):
+            """Establece la contraseña hasheada"""
+            self.password_hash = generate_password_hash(password)
+        
+        def check_password(self, password):
+            """Verifica la contraseña"""
+            return check_password_hash(self.password_hash, password)
+        
+        def is_active(self):
+            """Requerido por Flask-Login"""
+            return self.activo
+        
+        def get_id(self):
+            """Requerido por Flask-Login"""
+            return str(self.id)
+        
+        def actualizar_ultimo_login(self):
+            """Actualiza la fecha del último login"""
+            self.ultimo_login = datetime.utcnow()
+            _db.session.commit()
+        
+        def __repr__(self):
+            return f"<Usuario {self.username}>"
+        
+        @login_manager.user_loader
+        def load_user(user_id):
+            return Usuario.query.get(int(user_id))
 
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
@@ -535,10 +591,12 @@ def create_app():
 
     # === Rutas ===
     @app.get("/")
+    @login_required
     def home():
         return redirect(url_for("lista_expedientes"))
-
+    
     @app.get("/expedientes")
+    @login_required
     def lista_expedientes():
         q = request.args.get("q", "").strip()
         formato_f = (request.args.get("formato", "").strip().title() or "")
@@ -560,12 +618,15 @@ def create_app():
             formato_f = ""
         items = query.order_by(Expediente.finalizado.asc(), Expediente.created_at.desc()).paginate(page=page, per_page=20)
         return render_template("expedientes_list.html", items=items, q=q, formato=formato_f)
-
+    
+    
     @app.get("/expedientes/nuevo")
+    @login_required
     def nuevo_expediente():
         return render_template("expediente_form.html", item=None, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS, tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)
 
     @app.post("/expedientes/nuevo")
+    @login_required
     def crear_expediente():
         data = _parse_form(request.form)
         prof = (data.get("profesion") or "").strip()
@@ -604,14 +665,17 @@ def create_app():
         return redirect(url_for("lista_expedientes"))
 
     @app.get("/expedientes/<int:item_id>")
+    @login_required
     def detalle_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
         return render_template("expediente_detail.html", item=item)
 
     @app.get("/expedientes/<int:item_id>/editar")
+    @login_required
     def editar_expediente(item_id: int):
         item = Expediente.query.get_or_404(item_id)
         return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS, tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)
+    
     
     @app.post("/gop/sincronizar")
     def sincronizar_gop():
@@ -1279,6 +1343,7 @@ def create_app():
             download_name=filename,
             mimetype='application/pdf'
         )
+    
 
     # === Parsers ===
     def _parse_bool(value: str) -> bool:
@@ -1571,5 +1636,95 @@ def create_app():
                 ))
                 count += 1
         return count
+    
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        """Página de login"""
+        # Si ya está logueado, redirigir al inicio
+        if current_user.is_authenticated:
+            return redirect(url_for('lista_expedientes'))
+        
+        if request.method == "POST":
+            username = request.form.get('username', '').strip()
+            password = request.form.get('password', '').strip()
+            remember_me = bool(request.form.get('remember_me'))
+            
+            if not username or not password:
+                flash('Por favor completa todos los campos', 'error')
+                return render_template('auth/login.html')
+            
+            # Buscar usuario por username o email
+            usuario = Usuario.query.filter(
+                or_(Usuario.username == username, Usuario.email == username)
+            ).first()
+            
+            if usuario and usuario.check_password(password):
+                if not usuario.activo:
+                    flash('Tu cuenta está desactivada. Contacta al administrador.', 'error')
+                    return render_template('auth/login.html')
+                
+                # Login exitoso
+                login_user(usuario, remember=remember_me)
+                usuario.actualizar_ultimo_login()
+                
+                # Redirigir a la página solicitada o al inicio
+                next_page = request.args.get('next')
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                return redirect(url_for('lista_expedientes'))
+            else:
+                flash('Usuario o contraseña incorrectos', 'error')
+        
+        return render_template('auth/login.html')
+    
+    @app.route("/logout")
+    @login_required
+    def logout():
+        """Cerrar sesión"""
+        username = current_user.username
+        logout_user()
+        flash(f'Sesión cerrada correctamente. ¡Hasta luego, {username}!', 'info')
+        return redirect(url_for('login'))
+    
+    @app.route("/perfil")
+    @login_required
+    def perfil():
+        """Perfil del usuario"""
+        return render_template('auth/perfil.html', usuario=current_user)
+    
+    @app.route("/cambiar-password", methods=["GET", "POST"])
+    @login_required
+    def cambiar_password():
+        """Cambiar contraseña"""
+        if request.method == "POST":
+            password_actual = request.form.get('password_actual', '').strip()
+            password_nueva = request.form.get('password_nueva', '').strip()
+            password_confirmar = request.form.get('password_confirmar', '').strip()
+            
+            # Validaciones
+            if not password_actual or not password_nueva or not password_confirmar:
+                flash('Por favor completa todos los campos', 'error')
+                return render_template('auth/cambiar_password.html')
+            
+            if not current_user.check_password(password_actual):
+                flash('La contraseña actual es incorrecta', 'error')
+                return render_template('auth/cambiar_password.html')
+            
+            if password_nueva != password_confirmar:
+                flash('Las contraseñas nuevas no coinciden', 'error')
+                return render_template('auth/cambiar_password.html')
+            
+            if len(password_nueva) < 6:
+                flash('La contraseña debe tener al menos 6 caracteres', 'error')
+                return render_template('auth/cambiar_password.html')
+            
+            # Cambiar contraseña
+            current_user.set_password(password_nueva)
+            _db.session.commit()
+            
+            flash('Contraseña cambiada correctamente', 'success')
+            return redirect(url_for('perfil'))
+        
+        return render_template('auth/cambiar_password.html')
 
     return app

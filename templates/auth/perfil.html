@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+{% block title %}Mi Perfil — CPIM{% endblock %}
+{% block content %}
+
+<style>
+/* Estilos específicos para el perfil */
+:root {
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --card-br: rgba(69,123,255,.18);
+}
+
+.profile-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.profile-header {
+  background: linear-gradient(135deg, var(--primary-blue-90), #ffffff);
+  border: 1px solid var(--card-br);
+  border-radius: 20px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 15px 35px rgba(69, 123, 255, 0.1);
+  text-align: center;
+}
+
+.profile-avatar {
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, var(--primary-blue-55), var(--primary-blue-40));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: white;
+  margin: 0 auto 1.5rem;
+  box-shadow: 0 15px 35px rgba(69, 123, 255, 0.3);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.profile-title {
+  color: var(--primary-blue-20);
+  font-weight: 800;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-subtitle {
+  color: var(--primary-blue-40);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.info-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--card-br);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 25px rgba(69, 123, 255, 0.08);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.info-item {
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--primary-blue-95), #ffffff);
+  border-radius: 12px;
+  border-left: 4px solid var(--primary-blue-50);
+}
+
+.info-label {
+  font-weight: 700;
+  color: var(--primary-blue-20);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+}
+
+.info-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--primary-blue-40);
+}
+
+.badge-admin {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #92400e;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.badge-user {
+  background: linear-gradient(135deg, var(--primary-blue-80), var(--primary-blue-70));
+  color: var(--primary-blue-20);
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.actions-bar {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.btn-modern {
+  background: linear-gradient(135deg, var(--primary-blue-55), var(--primary-blue-40));
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(69, 123, 255, 0.25);
+}
+
+.btn-modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(69, 123, 255, 0.35);
+  color: white;
+  text-decoration: none;
+}
+
+.btn-outline-modern {
+  border: 2px solid var(--primary-blue-55);
+  color: var(--primary-blue-20);
+  background: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-modern:hover {
+  background: var(--primary-blue-90);
+  color: var(--primary-blue-20);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    padding: 1.5rem;
+  }
+  
+  .profile-avatar {
+    width: 80px;
+    height: 80px;
+    font-size: 2.5rem;
+  }
+  
+  .profile-title {
+    font-size: 1.5rem;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<div class="profile-container">
+  <!-- Header del Perfil -->
+  <div class="profile-header">
+    <div class="profile-avatar">
+      {{ usuario.nombre_completo[:1] if usuario.nombre_completo else usuario.username[:1] }}
+    </div>
+    <h1 class="profile-title">{{ usuario.nombre_completo or usuario.username }}</h1>
+    <p class="profile-subtitle">
+      {% if usuario.es_admin %}
+        <span class="badge-admin">👑 Administrador</span>
+      {% else %}
+        <span class="badge-user">👤 Usuario</span>
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- Información del Usuario -->
+  <div class="info-card">
+    <h3 style="color: var(--primary-blue-20); font-weight: 700; margin-bottom: 1.5rem;">
+      📋 Información Personal
+    </h3>
+    
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">👤 Usuario</div>
+        <div class="info-value">{{ usuario.username }}</div>
+      </div>
+      
+      <div class="info-item">
+        <div class="info-label">📧 Email</div>
+        <div class="info-value">{{ usuario.email }}</div>
+      </div>
+      
+      <div class="info-item">
+        <div class="info-label">📅 Miembro desde</div>
+        <div class="info-value">{{ usuario.created_at.strftime('%d/%m/%Y') }}</div>
+      </div>
+      
+      <div class="info-item">
+        <div class="info-label">🕐 Último login</div>
+        <div class="info-value">
+          {% if usuario.ultimo_login %}
+            {{ usuario.ultimo_login.strftime('%d/%m/%Y a las %H:%M') }}
+          {% else %}
+            Nunca
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="info-item">
+        <div class="info-label">⚡ Estado</div>
+        <div class="info-value">
+          {% if usuario.activo %}
+            <span style="color: #16a34a;">✅ Activo</span>
+          {% else %}
+            <span style="color: #dc2626;">❌ Desactivado</span>
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="info-item">
+        <div class="info-label">🔧 Tipo de cuenta</div>
+        <div class="info-value">
+          {% if usuario.es_admin %}
+            <span style="color: #f59e0b;">👑 Administrador</span>
+          {% else %}
+            <span style="color: var(--primary-blue-50);">👤 Usuario estándar</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Acciones -->
+  <div class="actions-bar">
+    <a href="{{ url_for('cambiar_password') }}" class="btn-modern">
+      🔒 Cambiar Contraseña
+    </a>
+    
+    <a href="{{ url_for('lista_expedientes') }}" class="btn-outline-modern">
+      📋 Volver a Expedientes
+    </a>
+  </div>
+</div>
+
+{% endblock %}
