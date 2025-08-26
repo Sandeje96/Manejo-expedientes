@@ -1367,6 +1367,22 @@ def create_app():
             return int(value)
         except Exception:
             return None
+        
+    def _parse_money(value):
+        """Convierte '$ 1.234,56' o '1234,56' a Decimal('1234.56'). Vacío -> None."""
+        if value is None:
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        # quitar símbolo y espacios
+        s = s.replace("$", "").replace(" ", "")
+        # convertir formato AR a US: 1.234,56 -> 1234.56
+        s = s.replace(".", "").replace(",", ".")
+        try:
+            return Decimal(s)
+        except InvalidOperation:
+            return None
 
     def _parse_decimal_ars(value: str):
         """
@@ -1431,12 +1447,14 @@ def create_app():
             "fecha_salida": _parse_date(form.get("fecha_salida")),
             "persona_retira": form.get("persona_retira"),
             "nro_caja": _parse_int(form.get("nro_caja")),
-            "ruta_carpeta": form.get("ruta_carpeta"),
             "gop_numero": form.get("gop_numero"),
-            "whatsapp_profesional": form.get("whatsapp_profesional"),
-            "whatsapp_tramitador": form.get("whatsapp_tramitador"),
             "finalizado": _parse_bool(form.get("finalizado")),
             "fecha_finalizado": _parse_datetime(form.get("fecha_finalizado")),
+            "tasa_sellado_monto": _parse_money(form.get("tasa_sellado_monto")),
+            "tasa_visado_electrica_monto": _parse_money(form.get("tasa_visado_electrica_monto")),
+            "tasa_visado_salubridad_monto": _parse_money(form.get("tasa_visado_salubridad_monto")),
+            "tasa_visado_gas_monto": _parse_money(form.get("tasa_visado_gas_monto")),
+            "tasa_visado_electromecanica_monto": _parse_money(form.get("tasa_visado_electromecanica_monto")),
         }
     
     def _save_profesionales_adicionales(expediente, form):
