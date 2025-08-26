@@ -1349,10 +1349,17 @@ def create_app():
         """Genera archivo PDF con el análisis de tasas."""
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.lib import colors
+        from reportlab.platypus import Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
         from reportlab.lib.units import inch
         from io import BytesIO
+        import os
+
+        logo_path = os.path.join(current_app.static_folder, "img", "logo-cpim.png")
+        if os.path.exists(logo_path):
+            story.append(Image(logo_path, width=60, height=60))
+            story.append(Spacer(1, 8))
         
         # Crear PDF en memoria
         buffer = BytesIO()
