@@ -5,202 +5,243 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CPIM Expedientes{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  
-  <!-- Estilos para la ventana de carga -->
+
   <style>
-    /* Overlay de carga */
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(5px);
-      z-index: 9999;
-      display: none;
-      justify-content: center;
-      align-items: center;
-      animation: fadeIn 0.3s ease-in-out;
+    /* ========================
+       Paleta / Tokens UI
+       ======================== */
+    :root{
+      --primary-blue-90: hsl(220,100%,90%);
+      --primary-blue-85: hsl(220,100%,85%);
+      --primary-blue-80: hsl(220,100%,80%);
+      --primary-blue-70: hsl(220,100%,70%);
+      --primary-blue-60: hsl(220,100%,60%);
+      --primary-blue-55: hsl(220,100%,55%);
+      --primary-blue-50: hsl(220,100%,50%);
+      --primary-blue-40: hsl(220,100%,40%);
+      --primary-blue-30: hsl(220,100%,30%);
+      --primary-blue-20: hsl(220,100%,20%);
+      --ink-800:#14213d;
+      --ink-700:#22314d;
+      --ink-500:#475569;
+      --ink-300:#9aa3b2;
+      --card-br: rgba(69,123,255,.18);
+      --soft-shadow: 0 16px 36px rgba(69,123,255,.10);
+      --row-border: rgba(25, 60, 180, .22);
     }
 
-    .loading-overlay.show {
-      display: flex;
+    /* ========================
+       Fondo general & container
+       ======================== */
+    body{
+      background:
+        radial-gradient(1200px 800px at -10% -10%, var(--primary-blue-85) 0%, transparent 60%),
+        radial-gradient(1200px 800px at 110% -10%, var(--primary-blue-90) 0%, transparent 60%),
+        linear-gradient(180deg,#ffffff 0%, #f8fbff 100%);
+      color: var(--ink-700);
     }
+    .container{
+      max-width: 1900px;
+    }
+
+    /* ========================
+       Navbar
+       ======================== */
+    .navbar{
+      background: linear-gradient(135deg, var(--primary-blue-60), var(--primary-blue-40)) !important;
+      box-shadow: 0 12px 28px rgba(69,123,255,.25);
+      border-bottom: 1px solid rgba(255,255,255,.25);
+    }
+    .navbar .navbar-brand{
+      font-weight: 900;
+      letter-spacing:.3px;
+    }
+    .navbar .nav-link{
+      font-weight: 700;
+      border-radius: 12px;
+      padding: .45rem .8rem !important;
+      transition: .2s ease;
+    }
+    .navbar .nav-link:hover{
+      background: rgba(255,255,255,.15);
+    }
+    .navbar .nav-link.active{
+      background: rgba(255,255,255,.22);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+    }
+
+    /* ========================
+       Botones base Bootstrap
+       ======================== */
+    .btn-primary{
+      background: linear-gradient(135deg, var(--primary-blue-55), var(--primary-blue-40));
+      border: none;
+      box-shadow: 0 10px 22px rgba(69,123,255,.25);
+      font-weight: 800;
+    }
+    .btn-primary:hover{ filter: brightness(.96); }
+    .btn-outline-primary{
+      border:2px solid var(--primary-blue-55); color: var(--primary-blue-20);
+      font-weight: 800; background: #fff;
+    }
+    .btn-outline-primary:hover{ background: var(--primary-blue-90); color: var(--primary-blue-20); }
+    .btn-secondary{
+      background: linear-gradient(135deg, var(--primary-blue-80), var(--primary-blue-70));
+      border:none; color: var(--primary-blue-20); font-weight:800;
+    }
+    .btn-success{ box-shadow: 0 10px 22px rgba(16,185,129,.15); font-weight:800; }
+    .btn-warning{ box-shadow: 0 10px 22px rgba(245,158,11,.15); font-weight:800; color:#3b2f00; }
+    .btn-info{ box-shadow: 0 10px 22px rgba(59,130,246,.15); font-weight:800; }
+
+    /* ========================
+       Cards / tablas suaves
+       ======================== */
+    .card{
+      border:1px solid var(--card-br);
+      border-radius:18px;
+      box-shadow: var(--soft-shadow);
+    }
+    .card .card-header{
+      background: linear-gradient(180deg,#f3f7ff,#eaf1ff);
+      color:var(--primary-blue-20);
+      border-bottom:1px solid var(--primary-blue-70);
+      border-radius:18px 18px 0 0;
+      font-weight:800;
+    }
+
+    /* Tablas: líneas marcadas y minimal */
+    .table thead th{
+      font-weight:800; color: var(--primary-blue-20);
+      border-bottom: 2px solid var(--row-border) !important;
+      background: linear-gradient(180deg, #f8fbff, #f2f6ff);
+    }
+    .table tbody tr{
+      border-bottom: 1px solid var(--row-border);
+    }
+    .table-hover tbody tr:hover{
+      background: rgba(69,123,255,.06);
+    }
+
+    /* Alerts suaves */
+    .alert{
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    }
+
+    /* ========================
+       OVERLAY DE CARGA (GOP)
+       ======================== */
+    .loading-overlay {
+      position: fixed; inset:0;
+      background: radial-gradient(800px 500px at 30% -10%, rgba(69,123,255,.25), transparent 60%),
+                  rgba(0, 12, 35, 0.78);
+      backdrop-filter: blur(6px);
+      z-index: 9999;
+      display: none; justify-content: center; align-items: center;
+      animation: fadeIn .25s ease-in-out;
+    }
+    .loading-overlay.show { display:flex; }
 
     .loading-container {
-      background: white;
+      background: linear-gradient(180deg,#ffffff 0%, #f5f8ff 100%);
+      border: 1px solid var(--card-br);
       border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      padding: 36px;
+      box-shadow: 0 28px 60px rgba(69, 123, 255, 0.35);
       text-align: center;
-      max-width: 450px;
-      width: 90%;
-      animation: scaleIn 0.4s ease-out;
+      max-width: 480px; width: 92%;
+      animation: scaleIn .35s ease-out;
     }
 
-    /* Animación del spinner */
     .sync-spinner {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
-      position: relative;
+      width: 84px; height: 84px; margin: 0 auto 18px; position: relative;
     }
-
     .sync-spinner::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: 4px solid #e3f2fd;
-      border-top: 4px solid #2196f3;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+      content: ''; position: absolute; inset:0;
+      border: 4px solid var(--primary-blue-85);
+      border-top: 4px solid var(--primary-blue-50);
+      border-radius: 50%; animation: spin 1s linear infinite;
     }
-
     .sync-spinner::after {
-      content: '🔄';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 24px;
-      animation: pulse 2s ease-in-out infinite;
+      content: '🔄'; position: absolute; top:50%; left:50%;
+      transform: translate(-50%,-50%); font-size: 24px; animation: pulse 2s ease-in-out infinite;
     }
 
-    /* Barra de progreso simulada */
     .progress-container {
-      background: #f8f9fa;
-      border-radius: 10px;
-      padding: 3px;
-      margin: 20px 0;
+      background: #eef3ff; border-radius: 10px; padding: 3px; margin: 18px 0;
+      border: 1px solid var(--card-br);
     }
-
     .progress-bar-custom {
       height: 8px;
-      background: linear-gradient(90deg, #2196f3, #1976d2);
-      border-radius: 8px;
-      width: 0%;
-      transition: width 0.3s ease;
+      background: linear-gradient(90deg, var(--primary-blue-55), var(--primary-blue-40));
+      border-radius: 8px; width: 0%; transition: width .3s ease;
       animation: progressGlow 2s ease-in-out infinite alternate;
+      box-shadow: 0 0 8px rgba(69,123,255,.35);
     }
+
+    .sync-steps{ text-align:left; margin: 14px 0 10px; }
+    .sync-step{
+      display:flex; align-items:center; margin:7px 0; padding:8px 12px; border-radius:10px;
+      transition:.25s ease; border:1px solid transparent;
+    }
+    .sync-step .sync-step-icon{ margin-right:10px; width:20px; text-align:center; }
+    .sync-step.active{
+      background: #e8f0ff; color: var(--primary-blue-20);
+      border-color: var(--primary-blue-80);
+    }
+    .sync-step.completed{
+      background: #e9fbf1; color:#1b6b2d; border-color: rgba(16,185,129,.35);
+    }
+    .sync-step.active .sync-step-icon{ animation: pulse 1.5s ease-in-out infinite; }
+
+    .sync-stats{
+      display:grid; grid-template-columns:1fr 1fr; gap:10px; margin: 14px 0 6px;
+    }
+    .sync-stat{
+      background:#ffffff; padding:10px; border-radius:10px; border:1px solid var(--card-br);
+      box-shadow: 0 6px 18px rgba(69,123,255,.08);
+    }
+    .sync-stat-number{ font-size: 20px; font-weight:900; color: var(--primary-blue-40); }
+    .sync-stat-label{ font-size: 12px; color: var(--ink-500); text-transform: uppercase; letter-spacing: .6px; }
 
     /* Animaciones */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    @keyframes scaleIn {
-      from { 
-        opacity: 0;
-        transform: scale(0.8);
-      }
-      to { 
-        opacity: 1;
-        transform: scale(1);
-      }
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
-    }
-
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    @keyframes scaleIn { from{opacity:0; transform:scale(.86)} to{opacity:1; transform:scale(1)} }
+    @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
     @keyframes progressGlow {
-      0% { box-shadow: 0 0 5px rgba(33, 150, 243, 0.3); }
-      100% { box-shadow: 0 0 20px rgba(33, 150, 243, 0.6); }
-    }
-
-    /* Estilos para los pasos */
-    .sync-steps {
-      text-align: left;
-      margin: 20px 0;
-    }
-
-    .sync-step {
-      display: flex;
-      align-items: center;
-      margin: 8px 0;
-      padding: 8px 12px;
-      border-radius: 8px;
-      transition: all 0.3s ease;
-    }
-
-    .sync-step.active {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
-
-    .sync-step.completed {
-      background: #e8f5e8;
-      color: #2e7d32;
-    }
-
-    .sync-step-icon {
-      margin-right: 10px;
-      font-size: 16px;
-      width: 20px;
-    }
-
-    .sync-step.active .sync-step-icon {
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    /* Estadísticas en tiempo real */
-    .sync-stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin: 20px 0;
-    }
-
-    .sync-stat {
-      background: #f8f9fa;
-      padding: 10px;
-      border-radius: 8px;
-      border-left: 4px solid #2196f3;
-    }
-
-    .sync-stat-number {
-      font-size: 20px;
-      font-weight: bold;
-      color: #1976d2;
-    }
-
-    .sync-stat-label {
-      font-size: 12px;
-      color: #666;
-      text-transform: uppercase;
+      0% { box-shadow: 0 0 6px rgba(69,123,255,.25); }
+      100% { box-shadow: 0 0 18px rgba(69,123,255,.55); }
     }
   </style>
 </head>
 <body>
 
-<!-- En la sección de navegación de base.html, agregar: -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+<nav class="navbar navbar-expand-lg navbar-dark mb-3">
   <div class="container-fluid">
     <a class="navbar-brand" href="{{ url_for('lista_expedientes') }}">CPIM</a>
-    <div class="navbar-nav">
-      <a class="nav-link" href="{{ url_for('lista_expedientes') }}">Expedientes</a>
-      <a class="nav-link" href="{{ url_for('analisis_tasas') }}">Análisis de Tasas</a>
-      <a class="nav-link" href="{{ url_for('estado_gop') }}">Estado GOP</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navCPIM" aria-controls="navCPIM" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div id="navCPIM" class="collapse navbar-collapse">
+      <div class="navbar-nav ms-auto gap-1">
+        <a class="nav-link {% if request.endpoint=='lista_expedientes' %}active{% endif %}" href="{{ url_for('lista_expedientes') }}">Expedientes</a>
+        <a class="nav-link {% if request.endpoint=='analisis_tasas' %}active{% endif %}" href="{{ url_for('analisis_tasas') }}">Análisis de Tasas</a>
+        <a class="nav-link {% if request.endpoint=='estado_gop' %}active{% endif %}" href="{{ url_for('estado_gop') }}">Estado GOP</a>
+      </div>
     </div>
   </div>
 </nav>
-<div class="container" style="max-width: 1900px;">
+
+<div class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="mt-2">
         {% for category, message in messages %}
-          <div class="alert alert-{{ 'warning' if category=='message' else category }}" role="alert">{{ message }}</div>
+          <div class="alert alert-{{ 'warning' if category=='message' else category }} shadow-sm" role="alert">
+            {{ message }}
+          </div>
         {% endfor %}
       </div>
     {% endif %}
@@ -212,24 +253,15 @@
 <!-- Overlay de Carga para Sincronización GOP -->
 <div id="gopLoadingOverlay" class="loading-overlay">
   <div class="loading-container">
-    <!-- Spinner principal -->
     <div class="sync-spinner"></div>
-    
-    <!-- Título -->
-    <h4 class="mb-3">Sincronizando con GOP</h4>
-    <p class="text-muted mb-4">Obteniendo datos del sistema de Posadas...</p>
-    
-    <!-- Barra de progreso -->
+    <h4 class="mb-2" style="font-weight:900; color:var(--primary-blue-20)">Sincronizando con GOP</h4>
+    <p class="text-muted mb-3">Obteniendo datos del sistema de Posadas...</p>
+
     <div class="progress-container">
       <div id="gopProgressBar" class="progress-bar-custom"></div>
     </div>
-    
-    <!-- Paso actual -->
-    <div id="gopCurrentStep" class="text-primary fw-bold mb-3">
-      Iniciando sincronización...
-    </div>
-    
-    <!-- Pasos del proceso -->
+    <div id="gopCurrentStep" class="text-primary fw-bold mb-2">Iniciando sincronización...</div>
+
     <div class="sync-steps">
       <div id="gopStep1" class="sync-step">
         <span class="sync-step-icon">⏳</span>
@@ -248,8 +280,7 @@
         <span>Actualizando base de datos</span>
       </div>
     </div>
-    
-    <!-- Estadísticas simuladas -->
+
     <div class="sync-stats">
       <div class="sync-stat">
         <div id="gopStatFound" class="sync-stat-number">0</div>
@@ -260,163 +291,112 @@
         <div class="sync-stat-label">Actualizados</div>
       </div>
     </div>
-    
-    <!-- Advertencia -->
-    <div class="alert alert-warning mt-3 mb-0" role="alert">
-      <small>
-        <strong>⚠️ No cerrar esta ventana</strong><br>
-        La sincronización puede tomar varios minutos
-      </small>
+
+    <div class="alert alert-warning mt-2 mb-0 py-2" role="alert">
+      <small><strong>⚠️ No cerrar esta ventana</strong><br>La sincronización puede tomar varios minutos</small>
     </div>
   </div>
 </div>
 
-<!-- JavaScript para el control de la ventana de carga -->
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Variables globales para el control de la sincronización
-let gopSyncProgress = 0;
-let gopCurrentStepIndex = 0;
-const gopSteps = ['gopStep1', 'gopStep2', 'gopStep3', 'gopStep4'];
-const gopStepTexts = [
-  'Conectando al sistema GOP...',
-  'Buscando expedientes en bandejas...',
-  'Procesando datos de bandejas...',
-  'Guardando cambios en base de datos...'
-];
+  // =======================
+  // Overlay / Simulación GOP
+  // =======================
+  let gopSyncProgress = 0;
+  let gopCurrentStepIndex = 0;
+  const gopSteps = ['gopStep1', 'gopStep2', 'gopStep3', 'gopStep4'];
+  const gopStepTexts = [
+    'Conectando al sistema GOP...',
+    'Buscando expedientes en bandejas...',
+    'Procesando datos de bandejas...',
+    'Guardando cambios en base de datos...'
+  ];
 
-// Función para mostrar la ventana de carga
-function showGopLoadingOverlay() {
-  // Resetear valores
-  gopSyncProgress = 0;
-  gopCurrentStepIndex = 0;
-  
-  // Mostrar overlay
-  document.getElementById('gopLoadingOverlay').classList.add('show');
-  document.body.style.overflow = 'hidden';
-  
-  // Resetear elementos visuales
-  document.getElementById('gopProgressBar').style.width = '0%';
-  document.getElementById('gopCurrentStep').textContent = 'Iniciando sincronización...';
-  document.getElementById('gopStatFound').textContent = '0';
-  document.getElementById('gopStatUpdated').textContent = '0';
-  
-  // Resetear pasos
-  gopSteps.forEach((stepId) => {
-    const stepElement = document.getElementById(stepId);
-    stepElement.classList.remove('active', 'completed');
-    stepElement.querySelector('.sync-step-icon').textContent = stepElement === document.getElementById('gopStep1') ? '⏳' : 
-                                                                stepElement === document.getElementById('gopStep2') ? '🔍' :
-                                                                stepElement === document.getElementById('gopStep3') ? '📊' : '💾';
-  });
-  
-  // Iniciar simulación de progreso
-  simulateGopProgress();
-}
+  function showGopLoadingOverlay() {
+    gopSyncProgress = 0;
+    gopCurrentStepIndex = 0;
 
-// Función para ocultar la ventana de carga
-function hideGopLoadingOverlay() {
-  document.getElementById('gopLoadingOverlay').classList.remove('show');
-  document.body.style.overflow = 'auto';
-}
+    document.getElementById('gopLoadingOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('gopProgressBar').style.width = '0%';
+    document.getElementById('gopCurrentStep').textContent = 'Iniciando sincronización...';
+    document.getElementById('gopStatFound').textContent = '0';
+    document.getElementById('gopStatUpdated').textContent = '0';
 
-// Función para actualizar el progreso
-function updateGopProgress(progress, stepIndex, stats = {}) {
-  // Actualizar barra de progreso
-  document.getElementById('gopProgressBar').style.width = progress + '%';
-  
-  // Actualizar paso actual
-  if (stepIndex >= 0 && stepIndex < gopStepTexts.length) {
-    document.getElementById('gopCurrentStep').textContent = gopStepTexts[stepIndex];
-    
-    // Marcar pasos como completados o activos
-    gopSteps.forEach((stepId, index) => {
-      const stepElement = document.getElementById(stepId);
-      stepElement.classList.remove('active', 'completed');
-      
-      if (index < stepIndex) {
-        stepElement.classList.add('completed');
-        stepElement.querySelector('.sync-step-icon').textContent = '✅';
-      } else if (index === stepIndex) {
-        stepElement.classList.add('active');
-      }
+    gopSteps.forEach((stepId) => {
+      const step = document.getElementById(stepId);
+      step.classList.remove('active','completed');
+      step.querySelector('.sync-step-icon').textContent =
+        stepId==='gopStep1' ? '⏳' : stepId==='gopStep2' ? '🔍' : stepId==='gopStep3' ? '📊' : '💾';
     });
-  }
-  
-  // Actualizar estadísticas
-  if (stats.found !== undefined) {
-    document.getElementById('gopStatFound').textContent = stats.found;
-  }
-  if (stats.updated !== undefined) {
-    document.getElementById('gopStatUpdated').textContent = stats.updated;
-  }
-}
 
-// Función para simular progreso (será reemplazada por progreso real)
-function simulateGopProgress() {
-  const progressInterval = setInterval(() => {
-    gopSyncProgress += Math.random() * 8 + 2; // Progreso más realista
-    
-    if (gopSyncProgress >= 25 && gopCurrentStepIndex === 0) {
-      gopCurrentStepIndex = 1;
-      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { found: Math.floor(Math.random() * 10) + 1 });
-    } else if (gopSyncProgress >= 50 && gopCurrentStepIndex === 1) {
-      gopCurrentStepIndex = 2;
-      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { found: Math.floor(Math.random() * 15) + 8 });
-    } else if (gopSyncProgress >= 75 && gopCurrentStepIndex === 2) {
-      gopCurrentStepIndex = 3;
-      updateGopProgress(gopSyncProgress, gopCurrentStepIndex, { 
-        found: Math.floor(Math.random() * 20) + 12,
-        updated: Math.floor(Math.random() * 15) + 8
+    simulateGopProgress();
+  }
+
+  function hideGopLoadingOverlay() {
+    document.getElementById('gopLoadingOverlay').classList.remove('show');
+    document.body.style.overflow = 'auto';
+  }
+
+  function updateGopProgress(progress, stepIndex, stats = {}) {
+    document.getElementById('gopProgressBar').style.width = progress + '%';
+    if (stepIndex >= 0 && stepIndex <= gopStepTexts.length) {
+      document.getElementById('gopCurrentStep').textContent = gopStepTexts[Math.min(stepIndex, gopStepTexts.length-1)];
+      gopSteps.forEach((id, idx) => {
+        const el = document.getElementById(id);
+        el.classList.remove('active','completed');
+        if (idx < stepIndex) {
+          el.classList.add('completed');
+          el.querySelector('.sync-step-icon').textContent = '✅';
+        } else if (idx === stepIndex) {
+          el.classList.add('active');
+        }
       });
-    } else if (gopSyncProgress >= 100) {
-      gopSyncProgress = 100;
-      updateGopProgress(gopSyncProgress, 3, { 
-        found: Math.floor(Math.random() * 25) + 18,
-        updated: Math.floor(Math.random() * 20) + 15
-      });
-      clearInterval(progressInterval);
-      
-      // Completar último paso
-      setTimeout(() => {
-        updateGopProgress(100, 4);
-        document.getElementById('gopCurrentStep').textContent = '¡Sincronización completada!';
-        
-        // La página se recargará automáticamente cuando termine la sincronización real
-      }, 1000);
-    } else {
-      updateGopProgress(gopSyncProgress, gopCurrentStepIndex);
     }
-  }, 300); // Un poco más lento para ser más realista
-}
+    if (stats.found !== undefined) document.getElementById('gopStatFound').textContent = stats.found;
+    if (stats.updated !== undefined) document.getElementById('gopStatUpdated').textContent = stats.updated;
+  }
 
-// Interceptar formularios de sincronización GOP
-document.addEventListener('DOMContentLoaded', function() {
-  // Buscar todos los formularios que contienen sincronización GOP
-  const syncForms = document.querySelectorAll('form[action*="sincronizar"]');
-  
-  syncForms.forEach(form => {
-    form.addEventListener('submit', function(e) {
-      // Mostrar la ventana de carga
-      showGopLoadingOverlay();
-      
-      // El formulario continuará su envío normal
-      // La ventana se ocultará cuando la página se recargue con los resultados
-    });
-  });
-  
-  // También interceptar botones de sincronización que no estén en formularios
-  const syncButtons = document.querySelectorAll('button[onclick*="sincronizar"], a[href*="sincronizar"]');
-  
-  syncButtons.forEach(button => {
-    button.addEventListener('click', function(e) {
-      // Solo mostrar si es un botón de sincronización
-      if (this.textContent.toLowerCase().includes('sincronizar') || 
-          this.textContent.includes('🔄')) {
-        showGopLoadingOverlay();
+  function simulateGopProgress() {
+    const iv = setInterval(() => {
+      gopSyncProgress += Math.random() * 8 + 2;
+      if (gopSyncProgress >= 25 && gopCurrentStepIndex === 0) {
+        gopCurrentStepIndex = 1; updateGopProgress(gopSyncProgress, 1, {found: Math.floor(Math.random()*10)+1});
+      } else if (gopSyncProgress >= 50 && gopCurrentStepIndex === 1) {
+        gopCurrentStepIndex = 2; updateGopProgress(gopSyncProgress, 2, {found: Math.floor(Math.random()*15)+8});
+      } else if (gopSyncProgress >= 75 && gopCurrentStepIndex === 2) {
+        gopCurrentStepIndex = 3; updateGopProgress(gopSyncProgress, 3, {found: Math.floor(Math.random()*20)+12, updated: Math.floor(Math.random()*15)+8});
+      } else if (gopSyncProgress >= 100) {
+        gopSyncProgress = 100; updateGopProgress(100, 3, {found: Math.floor(Math.random()*25)+18, updated: Math.floor(Math.random()*20)+15});
+        clearInterval(iv);
+        setTimeout(() => {
+          updateGopProgress(100, 4);
+          document.getElementById('gopCurrentStep').textContent = '¡Sincronización completada!';
+        }, 900);
+      } else {
+        updateGopProgress(gopSyncProgress, gopCurrentStepIndex);
       }
+    }, 300);
+  }
+
+  // Interceptar formularios/botones de sincronización
+  document.addEventListener('DOMContentLoaded', function(){
+    const syncForms = document.querySelectorAll('form[action*="sincronizar"]');
+    syncForms.forEach(form => {
+      form.addEventListener('submit', function(){ showGopLoadingOverlay(); });
+    });
+
+    const syncButtons = document.querySelectorAll('button[onclick*="sincronizar"], a[href*="sincronizar"]');
+    syncButtons.forEach(btn => {
+      btn.addEventListener('click', function(){
+        if (this.textContent.toLowerCase().includes('sincronizar') || this.textContent.includes('🔄')) {
+          showGopLoadingOverlay();
+        }
+      });
     });
   });
-});
 </script>
 
 </body>
