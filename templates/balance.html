@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block title %}Balance — CPIM{% endblock %}
+
+{% block content %}
+<style>
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --ink-700:#22314d; --ink-500:#475569;
+  --card-br: rgba(69,123,255,.18);
+  --row-border: rgba(25, 60, 180, .22);
+  --row-hover: rgba(25, 60, 180, .07);
+}
+.header-wrap{ display:flex; align-items:center; gap:.75rem; margin-bottom:1rem; flex-wrap:wrap; }
+.header-title{ color:var(--primary-blue-20); font-weight:900; margin:0; }
+.card-lux{
+  background: rgba(255,255,255,.95); border:1px solid var(--card-br); border-radius:18px;
+  box-shadow:0 18px 42px rgba(69,123,255,.08);
+}
+.card-lux .card-header{
+  background: linear-gradient(180deg, #f3f7ff, #eaf1ff); color:var(--primary-blue-20);
+  border-bottom:1px solid var(--primary-blue-70); border-radius:18px 18px 0 0; font-weight:800;
+}
+.btn-strong{
+  background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40));
+  border:none; color:#fff; padding:.55rem 1rem; border-radius:12px; font-weight:800;
+  box-shadow:0 10px 22px rgba(69,123,255,.25);
+}
+.form-control, .form-select{
+  border:2px solid var(--primary-blue-70); border-radius:10px; padding:.55rem .7rem; background:#fff;
+}
+.metrics-grid{
+  display:grid; gap:.9rem;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+}
+.metric{
+  position:relative; overflow:hidden; background:rgba(255,255,255,.92); border:1px solid var(--card-br);
+  border-radius:18px; box-shadow:0 18px 42px rgba(69,123,255,.08); text-align:center;
+}
+.metric .body{ padding:1rem .8rem; }
+.metric .value{ font-size:1.9rem; line-height:1; font-weight:900; margin-top:.2rem; }
+.metric small{ color:var(--ink-500); font-weight:600; }
+.metric .value.money{ color:var(--primary-blue-50); }
+.metric .value.good{ color:#16a34a; }
+.metric .value.warn{ color:#f59e0b; }
+.metric .value.info{ color:#0ea5e9; }
+.table-wrap{
+  border:1px solid var(--card-br); border-radius:14px; overflow:hidden; background:#fff;
+  box-shadow:0 12px 28px rgba(69,123,255,.06);
+}
+</style>
+
+<div class="header-wrap">
+  <h3 class="header-title">📊 Balance</h3>
+  <a href="{{ url_for('lista_expedientes') }}" class="btn btn-outline-primary ms-auto">← Volver</a>
+</div>
+
+<!-- Filtros -->
+<div class="card card-lux mb-3">
+  <div class="card-header"><h5 class="mb-0">Filtro por fechas</h5></div>
+  <div class="card-body">
+    <form class="row g-3" method="get" action="{{ url_for('balance') }}">
+      <div class="col-sm-4">
+        <label class="form-label">Desde</label>
+        <input type="date" class="form-control" name="desde" value="{{ fecha_desde.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label">Hasta</label>
+        <input type="date" class="form-control" name="hasta" value="{{ fecha_hasta.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-sm-4 d-flex align-items-end">
+        <button type="submit" class="btn btn-strong w-100">Aplicar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Métricas -->
+<div class="metrics-grid mb-3">
+  <div class="metric">
+    <div class="body">
+      <div class="value info">{{ kpis.ingresados }}</div>
+      <small>Expedientes ingresados</small>
+    </div>
+  </div>
+  <div class="metric">
+    <div class="body">
+      <div class="value good">{{ kpis.abonados }}</div>
+      <small>Expedientes abonados (visado)</small>
+    </div>
+  </div>
+  <div class="metric">
+    <div class="body">
+      <div class="value warn">{{ kpis.finalizados }}</div>
+      <small>Expedientes finalizados</small>
+    </div>
+  </div>
+  <div class="metric">
+    <div class="body">
+      <div class="value">{{ kpis.pendientes }}</div>
+      <small>Pendientes sin finalizar</small>
+    </div>
+  </div>
+  <div class="metric">
+    <div class="body">
+      <div class="value money">{{ kpis.total_sellados|ars }}</div>
+      <small>Tasas de sellado pagadas</small>
+    </div>
+  </div>
+  <div class="metric">
+    <div class="body">
+      <div class="value money">{{ kpis.cpim_30|ars }}</div>
+      <small>30% CPIM (sobre visados pagados)</small>
+    </div>
+  </div>
+</div>
+
+<!-- Pie informativo -->
+<div class="alert alert-soft">
+  <strong>Notas:</strong>
+  <ul class="mb-0">
+    <li><em>Ingresados</em> usa la fecha <code>created_at</code> (alta en el sistema).</li>
+    <li><em>Abonados</em> y montos usan <code>fecha_salida</code> y estado de pago <code>pagado</code> para visados/sellados.</li>
+    <li>El 30% CPIM se calcula sobre la suma de tasas de visado pagadas en el rango seleccionado.</li>
+  </ul>
+</div>
+{% endblock %}

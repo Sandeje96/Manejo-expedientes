@@ -430,19 +430,31 @@ def create_app():
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
 
     class ProfesionalAdicional(_db.Model):
-        """Modelo para profesionales adicionales de un expediente."""
         __tablename__ = "profesionales_adicionales"
-        
         id = _db.Column(_db.Integer, primary_key=True)
         expediente_id = _db.Column(_db.Integer, _db.ForeignKey("expedientes.id", ondelete="CASCADE"), nullable=False)
         nombre_profesional = _db.Column(_db.String(200), nullable=False)
         whatsapp_profesional = _db.Column(_db.String(50), nullable=True)
-        orden = _db.Column(_db.Integer, nullable=True)  # Para ordenar los profesionales
-        
-        # Metadatos
+        orden = _db.Column(_db.Integer, nullable=True)
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
         updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-        
+
+        # ✅ PROPIEDADES DE COMPATIBILIDAD PARA EL GENERADOR DE WORD
+        @property
+        def profesion(self):
+            """Compat: el generador de Word espera .profesion en cada profesional."""
+            return ""  # no almacenamos profesión para adicionales
+
+        @property
+        def nombre(self):
+            """Compat: algunos generadores usan .nombre en vez de .nombre_profesional."""
+            return self.nombre_profesional or ""
+
+        @property
+        def whatsapp(self):
+            """Compat: algunos generadores usan .whatsapp en vez de .whatsapp_profesional."""
+            return self.whatsapp_profesional or ""
+
         def __repr__(self):
             return f"<ProfesionalAdicional {self.id} - {self.nombre_profesional}>"
 
@@ -744,6 +756,93 @@ def create_app():
         }
         
         return render_template("gop_estado.html", stats=stats)
+    
+    @app.get("/balance")
+    @login_required
+    def balance():
+        """Vista informativa con métricas por rango de fecha."""
+        from sqlalchemy import func, and_
+
+        fecha_desde = _parse_date(request.args.get("desde")) or (date.today().replace(day=1))
+        fecha_hasta = _parse_date(request.args.get("hasta")) or date.today()
+
+        Expediente = _db.Model.registry._class_registry.get("Expediente")
+
+        # 1) Ingresados (usar DATE(created_at) para incluir todo el día)
+        ingresados = _db.session.query(func.count(Expediente.id)).filter(
+            and_(
+                func.date(Expediente.created_at) >= fecha_desde,
+                func.date(Expediente.created_at) <= fecha_hasta,
+            )
+        ).scalar()
+
+        # 2) Abonados (visado pagado por fecha_salida - ya es Date)
+        abonados = _db.session.query(func.count(Expediente.id)).filter(
+            and_(
+                Expediente.estado_pago_visado == 'pagado',
+                Expediente.fecha_salida >= fecha_desde,
+                Expediente.fecha_salida <= fecha_hasta,
+            )
+        ).scalar()
+
+        # 3) Finalizados (ya usabas DATE(fecha_finalizado), está bien)
+        finalizados = _db.session.query(func.count(Expediente.id)).filter(
+            and_(
+                Expediente.finalizado.is_(True),
+                Expediente.fecha_finalizado.isnot(None),
+                func.date(Expediente.fecha_finalizado) >= fecha_desde,
+                func.date(Expediente.fecha_finalizado) <= fecha_hasta,
+            )
+        ).scalar()
+
+        # 4) Pendientes (creados en el rango y NO finalizados) — usar DATE(created_at)
+        pendientes = _db.session.query(func.count(Expediente.id)).filter(
+            and_(
+                func.date(Expediente.created_at) >= fecha_desde,
+                func.date(Expediente.created_at) <= fecha_hasta,
+                Expediente.finalizado.is_(False),
+            )
+        ).scalar()
+
+        # 5) $ Sellados pagados (fecha_salida es Date; ok)
+        total_sellados = _db.session.query(func.coalesce(func.sum(Expediente.tasa_sellado_monto), 0)).filter(
+            and_(
+                Expediente.estado_pago_sellado == 'pagado',
+                Expediente.fecha_salida >= fecha_desde,
+                Expediente.fecha_salida <= fecha_hasta,
+            )
+        ).scalar()
+
+        # 6) $ Visados pagados y 30% CPIM (fecha_salida es Date; ok)
+        suma_visados = _db.session.query(
+            func.coalesce(func.sum(Expediente.tasa_visado_gas_monto), 0) +
+            func.coalesce(func.sum(Expediente.tasa_visado_salubridad_monto), 0) +
+            func.coalesce(func.sum(Expediente.tasa_visado_electrica_monto), 0) +
+            func.coalesce(func.sum(Expediente.tasa_visado_electromecanica_monto), 0)
+        ).filter(
+            and_(
+                Expediente.estado_pago_visado == 'pagado',
+                Expediente.fecha_salida >= fecha_desde,
+                Expediente.fecha_salida <= fecha_hasta,
+            )
+        ).scalar()
+
+        cpim_30 = (suma_visados or 0) * Decimal("0.30")
+
+        return render_template(
+            "balance.html",
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+            kpis={
+                "ingresados": ingresados or 0,
+                "abonados": abonados or 0,
+                "finalizados": finalizados or 0,
+                "pendientes": pendientes or 0,
+                "total_sellados": total_sellados or 0,
+                "cpim_30": cpim_30 or 0,
+                "suma_visados": suma_visados or 0,
+            },
+        )
 
     @app.post("/expedientes/<int:item_id>/editar")
     def actualizar_expediente(item_id: int):
@@ -1420,11 +1519,33 @@ def create_app():
                 return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 return None
+            
+    def _capitalize_words(value):
+        """
+        Capitaliza cada palabra (Title Case) pero preserva siglas ya en mayúscula.
+        'arq. juan pérez' -> 'Arq. Juan Pérez'
+        'CPIM NORTE' -> 'CPIM NORTE'
+        """
+        if value is None:
+            return None
+        s = " ".join(str(value).strip().split())  # colapsa espacios extra
+        palabras = s.split(" ")
+        out = []
+        for w in palabras:
+            if len(w) >= 3 and w.isupper():
+                out.append(w)             # deja siglas intactas
+            else:
+                out.append(w.capitalize())
+        return " ".join(out)
 
     def _parse_form(form):
         def _estado_norm(k):
             v = (form.get(k) or "").strip().lower()
             return v if v in {"pendiente", "pagado", "exento"} else "pendiente"
+        def _capitalize(value):
+            if value is None:
+                return None
+            return str(value).strip().title()
         
         return {
             "fecha": _parse_date(form.get("fecha")),
@@ -1433,9 +1554,9 @@ def create_app():
             "nro_copias": _parse_int(form.get("nro_copias")),
             "tipo_trabajo": form.get("tipo_trabajo"),
             "nro_expediente_cpim": form.get("nro_expediente_cpim"),
-            "nombre_profesional": form.get("nombre_profesional"),
-            "nombre_comitente": form.get("nombre_comitente"),
-            "ubicacion": form.get("ubicacion"),
+            "nombre_profesional": _capitalize(form.get("nombre_profesional")),
+            "nombre_comitente": _capitalize(form.get("nombre_comitente")),
+            "ubicacion": _capitalize(form.get("ubicacion")),
             "partida_inmobiliaria": form.get("partida_inmobiliaria"),
             "nro_expediente_municipal": form.get("nro_expediente_municipal"),
             "visado_gas": _parse_bool(form.get("visado_gas")),
@@ -1445,7 +1566,7 @@ def create_app():
             "estado_pago_sellado": _estado_norm("estado_pago_sellado"),
             "estado_pago_visado": _estado_norm("estado_pago_visado"),
             "fecha_salida": _parse_date(form.get("fecha_salida")),
-            "persona_retira": form.get("persona_retira"),
+            "persona_retira": _capitalize(form.get("persona_retira")),
             "nro_caja": _parse_int(form.get("nro_caja")),
             "gop_numero": form.get("gop_numero"),
             "finalizado": _parse_bool(form.get("finalizado")),
@@ -1469,13 +1590,13 @@ def create_app():
         
         # Agregar nuevos profesionales adicionales
         for i, nombre in enumerate(nombres):
-            nombre = nombre.strip()
+            nombre = (nombre or "").strip()
             if nombre:  # Solo agregar si el nombre no está vacío
-                whatsapp = whatsapps[i].strip() if i < len(whatsapps) else ""
+                whatsapp = (whatsapps[i].strip() if i < len(whatsapps) and whatsapps[i] else "")
                 
                 profesional_adicional = ProfesionalAdicional(
                     expediente_id=expediente.id,
-                    nombre_profesional=nombre,
+                    nombre_profesional=_capitalize_words(nombre),   # 👈 aquí capitalizamos
                     whatsapp_profesional=whatsapp if whatsapp else None,
                     orden=i + 1
                 )
@@ -1598,6 +1719,7 @@ def create_app():
         
         # Opción 4: Credenciales por defecto
         return storage.Client()
+    
 
     def _upload_pdf_to_gcs(file_storage, dest_prefix: str):
         """

@@ -180,13 +180,7 @@
         <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" 
                value="{{ fecha_hasta or '' }}" required>
       </div>
-      <div class="col-md-4 d-flex align-items-end">
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="incluir_no_pagados" 
-                 name="incluir_no_pagados" {{ 'checked' if incluir_no_pagados else '' }}>
-          <label class="form-check-label ms-1" for="incluir_no_pagados">Incluir expedientes no pagados</label>
-        </div>
-      </div>
+
       <div class="col-12">
         <button type="submit" class="btn-strong">📊 Ejecutar Análisis</button>
       </div>
@@ -380,41 +374,45 @@
                 {% endif %}
               </td>
               <td style="min-width: 160px;">
-                {% set bandejas_info = exp.bandejas_info %}
-                {% if not bandejas_info.aplica_gop %}
-                  <small class="text-muted">{{ bandejas_info.mensaje }}</small>
-                {% elif not bandejas_info.tiene_datos_bandeja %}
-                  <small class="text-warning">Sin datos de bandeja</small>
-                  {% if bandejas_info.gop_info.numero %}
-                    <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
-                  {% endif %}
+                {% if exp.finalizado %}
+                  {# No mostrar nada si el expediente está finalizado #}
                 {% else %}
-                  {% set usuarios_activos = [] %}
-                  {% for tipo, info in bandejas_info.bandejas.items() %}
-                    {% if info.nombre and info.usuario %}
-                      {% set _ = usuarios_activos.append({'tipo':tipo,'usuario':info.usuario,'fecha':info.fecha,'dias':info.dias}) %}
+                  {% set bandejas_info = exp.bandejas_info %}
+                  {% if not bandejas_info.aplica_gop %}
+                    <small class="text-muted">{{ bandejas_info.mensaje }}</small>
+                  {% elif not bandejas_info.tiene_datos_bandeja %}
+                    <small class="text-warning">Sin datos de bandeja</small>
+                    {% if bandejas_info.gop_info.numero %}
+                      <br><small class="text-muted">GOP: {{ bandejas_info.gop_info.numero }}</small>
                     {% endif %}
-                  {% endfor %}
-                  {% if usuarios_activos %}
-                    {% for usuario_info in usuarios_activos %}
-                      <div class="mb-1">
-                        {% if usuario_info.tipo == 'cpim' %}
-                          <span class="badge-soft info me-1">C</span>
-                        {% elif usuario_info.tipo == 'imlauer' %}
-                          <span class="badge-soft warn me-1">I</span>
-                        {% elif usuario_info.tipo == 'onetto' %}
-                          <span class="badge-soft dark me-1">O</span>
-                        {% else %}
-                          <span class="badge-soft success me-1">P</span>
-                        {% endif %}
-                        <span class="fw-bold">{{ usuario_info.usuario }}</span>
-                        {% if usuario_info.dias > 0 %}
-                          <span class="badge-soft ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
-                        {% endif %}
-                      </div>
-                    {% endfor %}
                   {% else %}
-                    <small class="text-muted">Sin asignación</small>
+                    {% set usuarios_activos = [] %}
+                    {% for tipo, info in bandejas_info.bandejas.items() %}
+                      {% if info.nombre and info.usuario %}
+                        {% set _ = usuarios_activos.append({'tipo':tipo,'usuario':info.usuario,'fecha':info.fecha,'dias':info.dias}) %}
+                      {% endif %}
+                    {% endfor %}
+                    {% if usuarios_activos %}
+                      {% for usuario_info in usuarios_activos %}
+                        <div class="mb-1">
+                          {% if usuario_info.tipo == 'cpim' %}
+                            <span class="badge-soft info me-1">C</span>
+                          {% elif usuario_info.tipo == 'imlauer' %}
+                            <span class="badge-soft warn me-1">I</span>
+                          {% elif usuario_info.tipo == 'onetto' %}
+                            <span class="badge-soft dark me-1">O</span>
+                          {% else %}
+                            <span class="badge-soft success me-1">P</span>
+                          {% endif %}
+                          <span class="fw-bold">{{ usuario_info.usuario }}</span>
+                          {% if usuario_info.dias > 0 %}
+                            <span class="badge-soft ms-1">{{ usuario_info.dias }} día{{ 's' if usuario_info.dias != 1 else '' }}</span>
+                          {% endif %}
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      <small class="text-muted">Sin asignación</small>
+                    {% endif %}
                   {% endif %}
                 {% endif %}
               </td>
