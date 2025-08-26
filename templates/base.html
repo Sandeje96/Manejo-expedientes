@@ -286,25 +286,38 @@ NAVBAR (reemplazado)
 
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto gap-1">
+        {% if current_user.is_authenticated and current_user.es_admin %}
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='lista_expedientes' %}active{% endif %}"
-             href="{{ url_for('lista_expedientes') }}">📋 Expedientes</a>
+            href="{{ url_for('lista_expedientes') }}">📋 Expedientes</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='nuevo_expediente' %}active{% endif %}"
-             href="{{ url_for('nuevo_expediente') }}">➕ Nuevo</a>
+            href="{{ url_for('nuevo_expediente') }}">➕ Nuevo</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='analisis_tasas' %}active{% endif %}"
-             href="{{ url_for('analisis_tasas') }}">💰 Análisis Tasas</a>
+            href="{{ url_for('analisis_tasas') }}">💰 Análisis Tasas</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='estado_gop' %}active{% endif %}"
-             href="{{ url_for('estado_gop') }}">🔄 Estado GOP</a>
+            href="{{ url_for('estado_gop') }}">🔄 Estado GOP</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('balance') }}">💰 Balance</a>
+          <a class="nav-link {% if request.endpoint=='balance' %}active{% endif %}"
+            href="{{ url_for('balance') }}">📊 Balance</a>
         </li>
+      {% else %}
+        <!-- Usuario NO admin: solo Análisis y Balance -->
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='analisis_tasas' %}active{% endif %}"
+            href="{{ url_for('analisis_tasas') }}">💰 Análisis Tasas</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint=='balance' %}active{% endif %}"
+            href="{{ url_for('balance') }}">📊 Balance</a>
+        </li>
+      {% endif %}
       </ul>
 
       {% if current_user.is_authenticated %}

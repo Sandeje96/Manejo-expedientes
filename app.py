@@ -26,6 +26,8 @@ def init_login_manager(app):
     login_manager.login_message_category = 'info'
 
 
+
+
 def _normalize_db_url(url: str) -> str:
     # Railway a veces entrega postgres:// en lugar de postgresql://
     if url and url.startswith("postgres://"):
@@ -81,6 +83,31 @@ def create_app():
         s = f"{n:,.2f}"                  # 1,234,567.89
         s = s.replace(",", "X").replace(".", ",").replace("X", ".")
         return f"$ {s}"
+    
+    @app.before_request
+    def _limitar_no_admin():
+        # Solo aplica a usuarios logueados que NO son admin
+        if not getattr(current_user, "is_authenticated", False):
+            return
+        if getattr(current_user, "es_admin", False):
+            return
+
+        # Endpoints permitidos para usuarios limitados
+        permitidos = {
+            "analisis_tasas",          # pantalla de análisis
+            "exportar_analisis_tasas", # exportación del análisis
+            "ver_cierre_tasas",        # ver cierres históricos
+            "balance",                 # sección Balance (cuando la tengas/ya la tengas)
+            "login", "logout",         # auth
+            "perfil", "cambiar_password", "home"
+        }
+        ep = (request.endpoint or "")
+        if ep in permitidos or ep.startswith("static"):
+            return
+
+        # Cualquier otra ruta queda bloqueada
+        flash("Bienvenido.", "warning")
+        return redirect(url_for("analisis_tasas"))
 
     # === Modelos ===
     class Expediente(_db.Model):
