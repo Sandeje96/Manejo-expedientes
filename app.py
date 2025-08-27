@@ -215,25 +215,39 @@ def create_app():
             """
             Retorna una lista con todos los profesionales del expediente.
             El primer elemento es siempre el profesional principal.
+            Incluye nombre, whatsapp, profesion y si es_principal.
             """
             profesionales = []
-            
-            # Agregar profesional principal
+
+            # Principal
             if self.nombre_profesional:
                 profesionales.append({
                     'nombre': self.nombre_profesional,
                     'whatsapp': self.whatsapp_profesional,
+                    'profesion': (self.profesion or None),   # <<--- ahora incluimos la profesión del principal
                     'es_principal': True
                 })
-            
-            # Agregar profesionales adicionales
+
+            # Adicionales
             for prof_adic in self.profesionales_adicionales:
+                # Compat: si definiste @property profesion en ProfesionalAdicional, úsalo;
+                # si no, probamos con profesion_texto; si tampoco existe, None.
+                profesion_adic = None
+                if hasattr(prof_adic, 'profesion'):
+                    try:
+                        profesion_adic = (prof_adic.profesion or None)
+                    except Exception:
+                        profesion_adic = None
+                if not profesion_adic and hasattr(prof_adic, 'profesion_texto'):
+                    profesion_adic = (getattr(prof_adic, 'profesion_texto') or None)
+
                 profesionales.append({
                     'nombre': prof_adic.nombre_profesional,
                     'whatsapp': prof_adic.whatsapp_profesional,
+                    'profesion': profesion_adic,            # <<--- y la de cada adicional
                     'es_principal': False
                 })
-            
+
             return profesionales
         
         @property
@@ -452,6 +466,7 @@ def create_app():
         filename = _db.Column(_db.String(255), nullable=False)
         gcs_path = _db.Column(_db.String(512), nullable=False)  # gs://bucket/objeto o ruta interna
         public_url = _db.Column(_db.String(512), nullable=True)  # URL pública si se habilita
+        profesion_texto = _db.Column(_db.String(120), nullable=True)
         mime_type = _db.Column(_db.String(100), nullable=True)
         size_bytes = _db.Column(_db.Integer, nullable=True)
         uploaded_at = _db.Column(_db.DateTime, default=datetime.utcnow)
@@ -465,12 +480,13 @@ def create_app():
         orden = _db.Column(_db.Integer, nullable=True)
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
         updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        profesion_texto = _db.Column(_db.String(120), nullable=True)  # <-- NUEVO
 
         # ✅ PROPIEDADES DE COMPATIBILIDAD PARA EL GENERADOR DE WORD
         @property
         def profesion(self):
             """Compat: el generador de Word espera .profesion en cada profesional."""
-            return ""  # no almacenamos profesión para adicionales
+            return self.profesion_texto or ""
 
         @property
         def nombre(self):
@@ -1617,6 +1633,7 @@ def create_app():
         # Obtener los datos de profesionales adicionales del formulario
         nombres = form.getlist('profesionales_adicionales_nombre[]')
         whatsapps = form.getlist('profesionales_adicionales_whatsapp[]')
+        profesiones = form.getlist('profesionales_adicionales_profesion[]')  # 👈 NUEVO
         
         # Eliminar profesionales adicionales existentes
         for prof_existente in expediente.profesionales_adicionales:
@@ -1632,6 +1649,7 @@ def create_app():
                     expediente_id=expediente.id,
                     nombre_profesional=_capitalize_words(nombre),   # 👈 aquí capitalizamos
                     whatsapp_profesional=whatsapp if whatsapp else None,
+                    profesion_texto=(profesiones[i].strip() if i < len(profesiones) and profesiones[i] else None),  # 👈 NUEVO
                     orden=i + 1
                 )
                 _db.session.add(profesional_adicional)
