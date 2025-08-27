@@ -122,7 +122,7 @@ def create_app():
         tipo_trabajo = _db.Column(_db.String(200), nullable=True)
 
         # Identificación / actores
-        nro_expediente_cpim = _db.Column(_db.String(100), unique=True, nullable=True)
+        nro_expediente_cpim = _db.Column(_db.String(100), nullable=True, index=True)
         nombre_profesional = _db.Column(_db.String(200), nullable=True)
         nombre_comitente = _db.Column(_db.String(200), nullable=True)
         ubicacion = _db.Column(_db.String(255), nullable=True)
@@ -1603,7 +1603,7 @@ def create_app():
             "formato": form.get("formato"),
             "nro_copias": _parse_int(form.get("nro_copias")),
             "tipo_trabajo": form.get("tipo_trabajo"),
-            "nro_expediente_cpim": form.get("nro_expediente_cpim"),
+            "nro_expediente_cpim": ((form.get("nro_expediente_cpim") or "").strip() or None),
             "nombre_profesional": _capitalize(form.get("nombre_profesional")),
             "nombre_comitente": _capitalize(form.get("nombre_comitente")),
             "ubicacion": _capitalize(form.get("ubicacion")),
