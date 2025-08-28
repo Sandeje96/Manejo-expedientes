@@ -1918,5 +1918,385 @@ def create_app():
             return redirect(url_for('perfil'))
         
         return render_template('auth/cambiar_password.html')
+    
+    # ==== IMPORTACIÓN DESDE EXCEL/CSV ==========================================
+    # ==== IMPORTACIÓN DESDE EXCEL/CSV ==========================================
+    import csv, unicodedata, math
+    import datetime as _dt
+    from decimal import Decimal, InvalidOperation
+    import click
 
+    try:
+        import pandas as pd
+    except Exception:
+        pd = None
+
+    # Normalizar: minúsculas, sin tildes, sin espacios dobles
+    def _norm_txt(s):
+        if s is None:
+            return None
+        s = str(s).strip()
+        if s == "":
+            return None
+        s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+        return s
+
+    def _norm_header(h):
+        h = _norm_txt(h) or ""
+        h = h.lower().replace(" ", "_").replace("-", "_")
+        return h
+
+    # ===================== Nulls & coerción =====================
+
+    _NULL_STRS = {"", "nan", "nat", "none", "null", "-"}
+
+    def _is_nullish(v):
+        if v is None:
+            return True
+        # pandas NaN / NaT / pd.NA
+        if pd is not None:
+            try:
+                if pd.isna(v):
+                    return True
+            except Exception:
+                pass
+        # float NaN
+        if isinstance(v, float):
+            try:
+                if math.isnan(v):
+                    return True
+            except Exception:
+                pass
+        # strings "NaN", "NaT", etc.
+        if isinstance(v, str) and v.strip().lower() in _NULL_STRS:
+            return True
+        return False
+
+    def _as_str(v):
+        return None if _is_nullish(v) else str(v).strip()
+
+    def _as_decimal(v):
+        if _is_nullish(v):
+            return None
+        try:
+            d = Decimal(str(v).replace(",", ".").strip())
+        except (InvalidOperation, AttributeError):
+            return None
+        return None if d.is_nan() else d
+
+    def _excel_parse_date(v):
+        if _is_nullish(v):
+            return None
+
+        # pandas Timestamp -> date
+        if pd is not None and isinstance(v, pd.Timestamp):
+            return None if pd.isna(v) else v.date()
+
+        # datetime/date nativas
+        if isinstance(v, _dt.datetime):
+            return v.date()
+        if isinstance(v, _dt.date):
+            return v
+
+        s = str(v).strip()
+        if s == "":
+            return None
+
+        # Serial de Excel
+        if s.isdigit():
+            base = _dt.date(1899, 12, 30)  # offset Excel
+            return base + _dt.timedelta(days=int(s))
+
+        # Intentos con formato explícito (incluye variantes con hora)
+        fmts = (
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y",
+            "%d-%m-%Y %H:%M:%S",
+            "%d-%m-%Y",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y",
+        )
+        for fmt in fmts:
+            try:
+                return _dt.datetime.strptime(s, fmt).date()
+            except ValueError:
+                pass
+
+        # Último intento: pandas, con dayfirst dinámico (evita el warning)
+        if pd is not None:
+            try:
+                # Heurística: si empieza con 2 dígitos y separador, es dayfirst (dd/mm o dd-mm)
+                dayfirst = False
+                if len(s) >= 3 and s[:2].isdigit() and s[2] in ("/", "-"):
+                    dayfirst = True
+                ts = pd.to_datetime(s, dayfirst=dayfirst, errors="coerce")
+                if pd.isna(ts):
+                    return None
+                return ts.date()
+            except Exception:
+                return None
+
+        return None
+
+    # Parseo de dinero (si existe tu helper _parse_money lo usa; si no, fallback)
+    def _parse_money_safe(s):
+        try:
+            return _parse_money(s)  # usa tu helper ya definido en este create_app
+        except Exception:
+            pass
+        if _is_nullish(s):
+            return None
+        if isinstance(s, (int, float, Decimal)):
+            d = _as_decimal(s)
+            return d
+        txt = str(s).strip()
+        if txt == "":
+            return None
+        # limpiar $ puntos de miles y normalizar coma decimal
+        txt = txt.replace("$", "").replace(" ", "").replace(".", "").replace(",", ".")
+        d = _as_decimal(txt)
+        return d
+
+    # ===================== Columnas y lectura =====================
+
+    _MONEY_COLS = {
+        "tasa_sellado_monto",
+        "tasa_visado_gas_monto",
+        "tasa_visado_salubridad_monto",
+        "tasa_visado_electrica_monto",
+        "tasa_visado_electromecanica_monto",
+    }
+
+    _DATE_COLS = {"fecha", "fecha_salida", "fecha_inclusion_cierre"}
+
+    # Si más adelante agregás decimales no monetarios, ponelos acá
+    _DECIMAL_COLS = set()
+
+    # Campos que deben tratarse como texto (para que 'nan' -> None)
+    _STRING_COLS = {
+        "profesion",
+        "formato",
+        "tipo_trabajo",
+        "nombre_profesional",
+        "nombre_comitente",
+        "ubicacion",
+        "nro_expediente_municipal",
+        "gop_numero",
+        "partida_inmobiliaria",
+        "estado_pago_sellado",
+        "estado_pago_visado",
+        "nro_expediente_cpim",
+        "persona_retira",
+        "nro_caja",
+    }
+
+    # Lectura genérica: .xlsx con pandas, .csv con csv
+    def _read_table(path, sheet=None):
+        ext = os.path.splitext(path)[1].lower()
+        rows = []
+        if ext in (".xlsx", ".xls"):
+            if pd is None:
+                raise RuntimeError("Instala pandas+openpyxl o exportá a CSV.")
+            kwargs = {"dtype": str}
+            if sheet:
+                kwargs["sheet_name"] = sheet
+            df = pd.read_excel(path, **kwargs)  # todo como texto, luego parseamos
+            # normalizar encabezados
+            df.columns = [_norm_header(c) for c in df.columns]
+            rows = df.to_dict(orient="records")
+        else:
+            # CSV
+            with open(path, "r", newline="", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                reader.fieldnames = [_norm_header(c) for c in reader.fieldnames]
+                for r in reader:
+                    rows.append({k: v for k, v in r.items()})
+        return rows
+
+    # Mapeo directo: de cabecera normalizada a campo del modelo
+    _FIELD_MAP = {
+        "fecha": "fecha",
+        "profesion": "profesion",
+        "formato": "formato",
+        "nro_copias": "nro_copias",
+        "tipo_trabajo": "tipo_trabajo",
+        "nombre_profesional": "nombre_profesional",
+        "nombre_comitente": "nombre_comitente",
+        "ubicacion": "ubicacion",      # también cubre "ubicación"
+        "ubicación": "ubicacion",
+        "nro_expediente_municipal": "nro_expediente_municipal",
+        "gop_numero": "gop_numero",
+        "partida_inmobiliaria": "partida_inmobiliaria",
+        "tasa_sellado_monto": "tasa_sellado_monto",
+        "tasa_visado_gas_monto": "tasa_visado_gas_monto",
+        "tasa_visado_salubridad_monto": "tasa_visado_salubridad_monto",
+        "tasa_visado_electrica_monto": "tasa_visado_electrica_monto",
+        "tasa_visado_electromecanica_monto": "tasa_visado_electromecanica_monto",
+        "estado_pago_sellado": "estado_pago_sellado",
+        "estado_pago_visado": "estado_pago_visado",
+        "nro_expediente_cpim": "nro_expediente_cpim",
+        "fecha_salida": "fecha_salida",
+        "persona_retira": "persona_retira",
+        "nro_caja": "nro_caja",
+        "fecha_inclusion_cierre": "fecha_inclusion_cierre",
+    }
+
+    # Sanitizar y convertir tipos por columna
+    def _coerce(field, value):
+        if _is_nullish(value):
+            return None
+        if field in _DATE_COLS:
+            return _excel_parse_date(value)
+        if field in _MONEY_COLS:
+            return _parse_money_safe(value)  # devuelve None si viene NaN/NaT
+        if field in _DECIMAL_COLS:
+            return _as_decimal(value)
+        if field in _STRING_COLS:
+            return _as_str(value)
+        if field == "nro_copias":
+            try:
+                return int(str(value).strip())
+            except Exception:
+                return None
+        if field == "formato":
+            v = (_norm_txt(value) or "").upper()
+            # Aceptar Pape(l) / Digit(al)
+            if v.startswith("PAPE"):
+                return "Papel"
+            if v.startswith("DIGI"):
+                return "Digital"
+            return None
+        if field == "profesion":
+            return _norm_txt(value)
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    def _row_to_payload(row):
+        payload = {}
+        for k, v in row.items():
+            key = _FIELD_MAP.get(_norm_header(k))
+            if not key:
+                continue
+            val = _coerce(key, v)
+            # Regla CPIM: si queda vacío -> None (permitimos duplicados y no obligatorio)
+            if key == "nro_expediente_cpim":
+                val = (str(val).strip() or None) if val is not None else None
+            payload[key] = val
+        return payload
+
+    def _find_existing(payload):
+        """Regla de upsert:
+        1) gop_numero
+        2) nro_expediente_municipal
+        3) nro_expediente_cpim (puede haber duplicados -> toma el primero)
+        """
+        q = None
+        if payload.get("gop_numero"):
+            q = Expediente.query.filter_by(gop_numero=payload["gop_numero"]).first()
+            if q:
+                return q
+        if payload.get("nro_expediente_municipal"):
+            q = Expediente.query.filter_by(nro_expediente_municipal=payload["nro_expediente_municipal"]).first()
+            if q:
+                return q
+        if payload.get("nro_expediente_cpim"):
+            q = Expediente.query.filter_by(nro_expediente_cpim=payload["nro_expediente_cpim"]).first()
+            if q:
+                return q
+        return None
+
+    def _apply_payload(exp, payload):
+        # Solo setear keys con valor (no pisar con None)
+        for k, v in payload.items():
+            if v is None:
+                continue
+            setattr(exp, k, v)
+
+    def _summary_line(p):
+        keys = ["gop_numero","nro_expediente_municipal","nro_expediente_cpim","nombre_profesional","nombre_comitente","fecha"]
+        return ", ".join(f"{k}={p.get(k)}" for k in keys if k in p)
+
+    # ---- Comando CLI ----
+    def register_import_command(app):
+        @app.cli.command("importar-excel")
+        @click.argument("path", type=click.Path(exists=True))
+        @click.option("--sheet", default=None, help="Nombre de hoja (solo Excel).")
+        @click.option("--insert-only/--upsert", default=False, help="Insertar todo o actualizar si existe (default: upsert).")
+        @click.option("--commit/--dry-run", default=False, help="Grabar en DB (default: dry-run).")
+        def importar_excel(path, sheet, insert_only, commit):
+            """Importa expedientes desde un Excel/CSV con cabeceras en español.
+            Modo insert-only: inserta nuevos y OMITE los que ya existen según gop_numero,
+            nro_expediente_municipal o nro_expediente_cpim (evita UniqueViolation).
+            Modo upsert (default): crea o actualiza si ya existe.
+            """
+            click.echo(f"📄 Archivo: {path}")
+            rows = _read_table(path, sheet=sheet)
+            if not rows:
+                click.echo("No se encontraron filas.")
+                return
+
+            creados = 0
+            actualizados = 0
+            omitidos = 0
+            errores = 0
+            vistos = 0
+
+            for raw in rows:
+                vistos += 1
+                payload = _row_to_payload(raw)
+                try:
+                    # Siempre chequeamos existencia para evitar violaciones de UNIQUE.
+                    existing = _find_existing(payload)
+
+                    if insert_only:
+                        if existing:
+                            # Ya existe alguno de los identificadores => omitir
+                            omitidos += 1
+                            continue
+                        # Insertar nuevo
+                        exp = Expediente()
+                        _apply_payload(exp, payload)
+                        _db.session.add(exp)
+                        _db.session.flush()  # forzar validación por fila
+                        creados += 1
+                    else:
+                        # UPSERT
+                        if existing is None:
+                            exp = Expediente()
+                            _apply_payload(exp, payload)
+                            _db.session.add(exp)
+                            _db.session.flush()
+                            creados += 1
+                        else:
+                            _apply_payload(existing, payload)
+                            _db.session.flush()
+                            actualizados += 1
+
+                except Exception as e:
+                    errores += 1
+                    # limpiar el estado fallido y continuar con la próxima fila
+                    _db.session.rollback()
+                    click.echo(f"  ⚠️  Fila {vistos} con error: {e}\n     -> { _summary_line(payload) }")
+
+            click.echo(f"\nResumen: {vistos} filas | crear={creados} actualizar={actualizados} omitidos={omitidos} errores={errores}")
+
+            if commit and errores == 0:
+                try:
+                    _db.session.commit()
+                    click.echo("✅ Cambios confirmados.")
+                except Exception as e:
+                    _db.session.rollback()
+                    click.echo(f"❌ Error al confirmar: {e}")
+            else:
+                _db.session.rollback()
+                if commit and errores > 0:
+                    click.echo("❌ Hubo errores: no se confirmaron cambios (rollback).")
+                else:
+                    click.echo("ℹ️  Dry-run: no se guardó nada. Agregá --commit para confirmar.")
+    register_import_command(app)
     return app
+
+
