@@ -669,7 +669,7 @@ def _buscar_gops_especificos(gop_list):
                 
                 # Instalar solo chromium para ahorrar tiempo
                 result = subprocess.run([
-                    sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"
+                    sys.executable, "-m", "playwright", "install", "chromium"
                 ], capture_output=True, text=True, timeout=300)
                 
                 if result.returncode != 0:
@@ -712,8 +712,11 @@ def _buscar_gops_especificos(gop_list):
     MY_TRAYS_URL = f"{BASE}/frontend/web/site/my-trays"
     ALL_FORMALITIES_URL = f"{BASE}/frontend/web/formality/index-all"
     
-    # IMPORTANTE: En Railway siempre usar headless=true
-    HEADLESS = True  # Forzar headless en producción
+    # Detectar si estamos en Railway o local
+    IS_RAILWAY = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    HEADLESS = IS_RAILWAY or os.getenv("HEADLESS", "true").lower() == "true"
+    
+    current_app.logger.info(f"Entorno: {'Railway' if IS_RAILWAY else 'Local'}")
     current_app.logger.info(f"Modo headless: {HEADLESS}")
     
     resultados = {}
@@ -722,32 +725,34 @@ def _buscar_gops_especificos(gop_list):
     current_app.logger.info(f"=== INICIANDO NAVEGADOR ===")
     
     with sync_playwright() as p:
-        # Configuración optimizada para Railway
+        # Configuración optimizada para Railway/Docker
+        browser_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process'
+        ]
+        
+        # Solo agregar --single-process y --no-zygote en Railway
+        if IS_RAILWAY:
+            browser_args.extend(['--single-process', '--no-zygote'])
+        
         browser = p.chromium.launch(
             headless=HEADLESS,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-zygote',
-                '--single-process',  # Importante para contenedores
-                '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process'
-            ]
+            args=browser_args
         )
         
-        # Context con timeout más largo
+        # Context SIN el parámetro timeout (que no existe)
         context = browser.new_context(
             viewport={'width': 1280, 'height': 720},
-            ignore_https_errors=True,
-            # Timeout general más largo para Railway
-            timeout=60000  # 60 segundos
+            ignore_https_errors=True
         )
         
         page = context.new_page()
         
-        # Configurar timeout por defecto más largo
+        # Configurar timeouts por defecto en la página (no en el context)
         page.set_default_timeout(45000)  # 45 segundos
         page.set_default_navigation_timeout(60000)  # 60 segundos para navegación
         
@@ -769,7 +774,11 @@ def _buscar_gops_especificos(gop_list):
             # Verificar que estamos en la página de login
             if "login" not in page.url.lower():
                 current_app.logger.error(f"No llegamos a la página de login. URL: {page.url}")
-                page.screenshot(path="no_login_page.png")
+                # Tomar screenshot si es posible
+                try:
+                    page.screenshot(path="no_login_page.png")
+                except:
+                    pass
                 raise RuntimeError(f"No se pudo acceder al login. URL actual: {page.url}")
             
             current_app.logger.info("=== REALIZANDO LOGIN ===")
@@ -781,19 +790,33 @@ def _buscar_gops_especificos(gop_list):
             
             # === PASO 1: BUSCAR EN MIS BANDEJAS ===
             current_app.logger.info("=== NAVEGANDO A MIS BANDEJAS ===")
+            current_app.logger.info(f"GOP a buscar: {list(gops_pendientes)}")
             
             try:
-                # Intentar con networkidle primero
-                page.goto(MY_TRAYS_URL, wait_until="networkidle", timeout=60000)
-                current_app.logger.info(f"Cargada página Mis Bandejas: {page.url}")
+                # Navegar con múltiples intentos
+                for intento in range(3):
+                    try:
+                        page.goto(MY_TRAYS_URL, wait_until="networkidle", timeout=60000)
+                        current_app.logger.info(f"Cargada página Mis Bandejas: {page.url}")
+                        break
+                    except Exception as e:
+                        if intento == 2:
+                            raise e
+                        current_app.logger.warning(f"Intento {intento + 1} falló, reintentando...")
+                        page.wait_for_timeout(2000)
                 
                 # Esperar que la tabla cargue
                 page.wait_for_timeout(5000)
                 
                 # Verificar si hay tabla
-                if page.locator("table tbody tr, .table tbody tr").count() == 0:
-                    current_app.logger.warning("No se encontraron filas en Mis Bandejas, esperando más...")
+                table_count = page.locator("table tbody tr, .table tbody tr, .grid-view tbody tr").count()
+                current_app.logger.info(f"Filas encontradas en Mis Bandejas: {table_count}")
+                
+                if table_count == 0:
+                    current_app.logger.warning("No se encontraron filas inicialmente, esperando más...")
                     page.wait_for_timeout(10000)
+                    table_count = page.locator("table tbody tr, .table tbody tr, .grid-view tbody tr").count()
+                    current_app.logger.info(f"Filas después de esperar: {table_count}")
                 
                 encontrados_bandejas = _buscar_gops_en_pagina_multiple(page, list(gops_pendientes), "Mis Bandejas")
                 
@@ -814,7 +837,10 @@ def _buscar_gops_especificos(gop_list):
                 current_app.logger.error(f"Error en Mis Bandejas: {e}")
                 import traceback
                 current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-                page.screenshot(path="mis_bandejas_error.png")
+                try:
+                    page.screenshot(path="mis_bandejas_error.png")
+                except:
+                    pass
             
             # === PASO 2: BUSCAR EN TODOS LOS TRÁMITES (SOLO PENDIENTES) ===
             if gops_pendientes:
@@ -824,11 +850,20 @@ def _buscar_gops_especificos(gop_list):
                 try:
                     encontrados_todos_totales = {}
                     
-                    for gop_numero in gops_pendientes:
-                        current_app.logger.info(f"Buscando GOP {gop_numero}...")
+                    for idx, gop_numero in enumerate(gops_pendientes):
+                        current_app.logger.info(f"[{idx+1}/{len(gops_pendientes)}] Buscando GOP {gop_numero}...")
                         
-                        # Navegar a la página con más tiempo
-                        page.goto(ALL_FORMALITIES_URL, wait_until="networkidle", timeout=60000)
+                        # Navegar a la página con reintentos
+                        for intento in range(3):
+                            try:
+                                page.goto(ALL_FORMALITIES_URL, wait_until="networkidle", timeout=60000)
+                                break
+                            except Exception as e:
+                                if intento == 2:
+                                    current_app.logger.error(f"No se pudo cargar Todos los Trámites después de 3 intentos")
+                                    continue
+                                page.wait_for_timeout(2000)
+                        
                         page.wait_for_timeout(5000)
                         
                         # Buscar y aplicar filtro
@@ -838,30 +873,46 @@ def _buscar_gops_especificos(gop_list):
                             'input[placeholder*="nro" i]',
                             'input[placeholder*="GOP" i]',
                             'input#formality-nro_sistema',
-                            'input[name="Formality[nro_sistema]"]'
+                            'input[name="Formality[nro_sistema]"]',
+                            'input[name="FormalitySearch[nro_sistema]"]'
                         ]
                         
                         for selector in filtro_selectores:
                             try:
-                                if page.locator(selector).count() > 0:
+                                elementos = page.locator(selector)
+                                if elementos.count() > 0:
                                     current_app.logger.info(f"Aplicando filtro con selector: {selector}")
-                                    page.fill(selector, gop_numero)
+                                    elementos.first.fill("")  # Limpiar primero
+                                    page.wait_for_timeout(500)
+                                    elementos.first.fill(gop_numero)
+                                    page.wait_for_timeout(500)
                                     
                                     # Buscar y hacer click en botón de búsqueda
                                     search_buttons = [
                                         'button[type="submit"]',
                                         'button:has-text("Buscar")',
                                         'button:has-text("Filtrar")',
-                                        '.btn-primary[type="submit"]'
+                                        'button:has-text("Search")',
+                                        '.btn-primary[type="submit"]',
+                                        'input[type="submit"]'
                                     ]
                                     
+                                    button_clicked = False
                                     for btn_selector in search_buttons:
                                         try:
-                                            if page.locator(btn_selector).count() > 0:
-                                                page.click(btn_selector)
+                                            btn = page.locator(btn_selector).first
+                                            if btn and btn.is_visible():
+                                                btn.click()
+                                                button_clicked = True
+                                                current_app.logger.info(f"Click en botón: {btn_selector}")
                                                 break
                                         except:
                                             continue
+                                    
+                                    if not button_clicked:
+                                        # Intentar presionar Enter
+                                        elementos.first.press("Enter")
+                                        current_app.logger.info("Enviado con Enter")
                                     
                                     # Esperar resultados
                                     page.wait_for_timeout(3000)
@@ -876,6 +927,7 @@ def _buscar_gops_especificos(gop_list):
                             continue
                         
                         # Buscar en tabla filtrada
+                        current_app.logger.info(f"Buscando en resultados filtrados...")
                         encontrados_gop = _buscar_gops_en_pagina_simple(page, [gop_numero], "Todos los Trámites", gop_numero)
                         
                         if encontrados_gop:
@@ -894,6 +946,10 @@ def _buscar_gops_especificos(gop_list):
                     current_app.logger.error(f"Error en Todos los Trámites: {e}")
                     import traceback
                     current_app.logger.error(f"Traceback: {traceback.format_exc()}")
+                    try:
+                        page.screenshot(path="todos_tramites_error.png")
+                    except:
+                        pass
             else:
                 current_app.logger.info("✓ Todos los GOP encontrados en Mis Bandejas")
         
