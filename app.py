@@ -102,7 +102,7 @@ def create_app():
 
     # Supongamos que en gop_integration existe una función que vamos a preparar en el Paso 2:
     # sync_all_expedientes(update_progress: callable) -> None
-    from gop_integration import sync_all_expedientes
+    from gop_integration import sync_gop_data
 
     @app.route("/gop/sync", methods=["POST"])
     def gop_sync():
@@ -115,7 +115,7 @@ def create_app():
                 def update_progress(current, total, ok, fail, note=None):
                     msg = note or "Procesando..."
                     _set_task_state(task_id, status="running", progress=current, total=total, ok=ok, fail=fail, message=msg)
-                sync_all_expedientes(update_progress=update_progress)
+                sync_gop_data(update_progress=update_progress)
                 _set_task_state(task_id, status="done", message="Completado")
             except Exception as e:
                 _set_task_state(task_id, status="error", message=f"Error: {e}\n{traceback.format_exc()}")
