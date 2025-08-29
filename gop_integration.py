@@ -644,7 +644,7 @@ def _buscar_gops_en_pagina_simple(page, gops_buscados, fuente, gop_especifico):
 
 def _buscar_gops_especificos(gop_list):
     """
-    Busca números GOP específicos con lógica optimizada:
+    Busca números GOP específicos usando estrategia optimizada:
     1. Busca TODOS los GOP en "Mis Bandejas"
     2. Solo busca en "Todos los Trámites" los GOP que NO se encontraron en "Mis Bandejas"
     """
@@ -655,262 +655,264 @@ def _buscar_gops_especificos(gop_list):
     
     # Verificar e instalar navegadores si es necesario
     try:
-        current_app.logger.info("Verificando navegadores de Playwright...")
+        current_app.logger.info("=== INICIANDO VERIFICACIÓN DE PLAYWRIGHT ===")
         
         with sync_playwright() as p:
             try:
+                # Intento rápido para verificar si funcionan los navegadores
                 browser = p.chromium.launch(headless=True)
                 browser.close()
-                current_app.logger.info("✓ Navegadores disponibles")
+                current_app.logger.info("✓ Navegadores disponibles y funcionando")
             except Exception as browser_error:
-                current_app.logger.info("Navegadores no encontrados, instalando...")
+                current_app.logger.warning(f"Navegadores no disponibles: {browser_error}")
+                current_app.logger.info("Instalando navegador Chromium...")
                 
+                # Instalar solo chromium para ahorrar tiempo
                 result = subprocess.run([
-                    sys.executable, "-m", "playwright", "install", "chromium"
+                    sys.executable, "-m", "playwright", "install", "chromium", "--with-deps"
                 ], capture_output=True, text=True, timeout=300)
                 
                 if result.returncode != 0:
-                    raise RuntimeError(f"Error instalando navegadores: {result.stderr}")
+                    current_app.logger.error(f"Error instalando navegador: {result.stderr}")
+                    # Intentar sin --with-deps si falla
+                    result = subprocess.run([
+                        sys.executable, "-m", "playwright", "install", "chromium"
+                    ], capture_output=True, text=True, timeout=300)
+                    
+                    if result.returncode != 0:
+                        raise RuntimeError(f"No se pudo instalar Chromium: {result.stderr}")
                 
-                current_app.logger.info("✓ Navegadores instalados exitosamente")
+                current_app.logger.info("✓ Chromium instalado exitosamente")
     
     except Exception as install_error:
-        current_app.logger.error(f"Error con navegadores: {install_error}")
-        raise RuntimeError(f"No se pudieron instalar los navegadores de Playwright: {install_error}")
+        current_app.logger.error(f"ERROR CRÍTICO con Playwright: {install_error}")
+        raise RuntimeError(f"No se pudieron configurar los navegadores: {install_error}")
     
     # Cargar variables de entorno
     load_dotenv(override=True)
     user = os.getenv("USER_MUNI", "")
     pw = os.getenv("PASS_MUNI", "")
     
-    current_app.logger.info(f"Credenciales cargadas - Usuario: {user[:3]}*** Contraseña: {'*' * len(pw) if pw else 'VACÍA'}")
+    current_app.logger.info(f"=== CREDENCIALES ===")
+    current_app.logger.info(f"Usuario configurado: {user[:3]}*** (longitud: {len(user)})")
+    current_app.logger.info(f"Contraseña configurada: {'*' * min(len(pw), 8)} (longitud: {len(pw)})")
     
     if not user or not pw:
-        raise RuntimeError("No se encontraron credenciales USER_MUNI/PASS_MUNI en .env")
+        raise RuntimeError("Credenciales USER_MUNI/PASS_MUNI no encontradas en variables de entorno")
     
     if len(user.strip()) < 3:
-        raise RuntimeError("El usuario parece demasiado corto. Verificá USER_MUNI en .env")
+        raise RuntimeError(f"Usuario muy corto: '{user}'. Verifica USER_MUNI")
     
     if len(pw.strip()) < 3:
-        raise RuntimeError("La contraseña parece demasiado corta. Verificá PASS_MUNI en .env")
+        raise RuntimeError(f"Contraseña muy corta. Verifica PASS_MUNI")
     
     # Configuración
     BASE = "https://posadas.gestiondeobrasprivadas.com.ar"
     LOGIN_URL = f"{BASE}/frontend/web/site/login"
     MY_TRAYS_URL = f"{BASE}/frontend/web/site/my-trays"
     ALL_FORMALITIES_URL = f"{BASE}/frontend/web/formality/index-all"
-    HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
+    
+    # IMPORTANTE: En Railway siempre usar headless=true
+    HEADLESS = True  # Forzar headless en producción
+    current_app.logger.info(f"Modo headless: {HEADLESS}")
     
     resultados = {}
-    gops_pendientes = set(gop_list)  # Conjunto de GOP que aún necesitan buscarse
+    gops_pendientes = set(gop_list)
+    
+    current_app.logger.info(f"=== INICIANDO NAVEGADOR ===")
     
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=HEADLESS)
-        context = browser.new_context()
+        # Configuración optimizada para Railway
+        browser = p.chromium.launch(
+            headless=HEADLESS,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--no-zygote',
+                '--single-process',  # Importante para contenedores
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process'
+            ]
+        )
+        
+        # Context con timeout más largo
+        context = browser.new_context(
+            viewport={'width': 1280, 'height': 720},
+            ignore_https_errors=True,
+            # Timeout general más largo para Railway
+            timeout=60000  # 60 segundos
+        )
+        
         page = context.new_page()
         
+        # Configurar timeout por defecto más largo
+        page.set_default_timeout(45000)  # 45 segundos
+        page.set_default_navigation_timeout(60000)  # 60 segundos para navegación
+        
         try:
-            # === LOGIN ===
-            current_app.logger.info("=== REALIZANDO LOGIN ===")
-            page.goto(LOGIN_URL, wait_until="domcontentloaded")
-            page.wait_for_timeout(2000)
-            
-            _perform_login(page, user, pw)
-            
-            # === PASO 1: BUSCAR EN MIS BANDEJAS ===
-            current_app.logger.info("=== PASO 1: BUSCANDO EN MIS BANDEJAS ===")
-            current_app.logger.info(f"GOP a buscar en Mis Bandejas: {list(gops_pendientes)}")
+            # === LOGIN MEJORADO ===
+            current_app.logger.info("=== NAVEGANDO A PÁGINA DE LOGIN ===")
             
             try:
-                page.goto(MY_TRAYS_URL, wait_until="networkidle")
+                page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
+                current_app.logger.info(f"URL actual después de navegación: {page.url}")
+            except Exception as nav_error:
+                current_app.logger.error(f"Error navegando al login: {nav_error}")
+                # Intentar de nuevo con networkidle
+                page.goto(LOGIN_URL, wait_until="networkidle", timeout=60000)
+            
+            # Esperar un poco más para asegurar que la página cargó
+            page.wait_for_timeout(3000)
+            
+            # Verificar que estamos en la página de login
+            if "login" not in page.url.lower():
+                current_app.logger.error(f"No llegamos a la página de login. URL: {page.url}")
+                page.screenshot(path="no_login_page.png")
+                raise RuntimeError(f"No se pudo acceder al login. URL actual: {page.url}")
+            
+            current_app.logger.info("=== REALIZANDO LOGIN ===")
+            _perform_login(page, user, pw)
+            
+            # Verificar login exitoso con más tiempo
+            page.wait_for_timeout(5000)
+            current_app.logger.info(f"URL después del login: {page.url}")
+            
+            # === PASO 1: BUSCAR EN MIS BANDEJAS ===
+            current_app.logger.info("=== NAVEGANDO A MIS BANDEJAS ===")
+            
+            try:
+                # Intentar con networkidle primero
+                page.goto(MY_TRAYS_URL, wait_until="networkidle", timeout=60000)
+                current_app.logger.info(f"Cargada página Mis Bandejas: {page.url}")
+                
+                # Esperar que la tabla cargue
+                page.wait_for_timeout(5000)
+                
+                # Verificar si hay tabla
+                if page.locator("table tbody tr, .table tbody tr").count() == 0:
+                    current_app.logger.warning("No se encontraron filas en Mis Bandejas, esperando más...")
+                    page.wait_for_timeout(10000)
+                
                 encontrados_bandejas = _buscar_gops_en_pagina_multiple(page, list(gops_pendientes), "Mis Bandejas")
                 
-                # Agregar resultados y REMOVER de pendientes
+                # Procesar resultados
                 gops_encontrados_bandejas = set()
                 for gop_key, datos in encontrados_bandejas.items():
                     resultados[gop_key] = datos
                     gop_numero = datos['nro_sistema']
                     gops_encontrados_bandejas.add(gop_numero)
                 
-                # Actualizar lista de pendientes
                 gops_pendientes -= gops_encontrados_bandejas
                 
-                current_app.logger.info(f"✓ Encontrados en Mis Bandejas: {len(encontrados_bandejas)} registros")
-                current_app.logger.info(f"✓ GOP encontrados en Mis Bandejas: {list(gops_encontrados_bandejas)}")
-                current_app.logger.info(f"⏳ GOP pendientes para Todos los Trámites: {list(gops_pendientes)}")
+                current_app.logger.info(f"✓ Encontrados en Mis Bandejas: {len(encontrados_bandejas)}")
+                current_app.logger.info(f"✓ GOP encontrados: {list(gops_encontrados_bandejas)}")
+                current_app.logger.info(f"⏳ Pendientes para Todos los Trámites: {list(gops_pendientes)}")
                 
             except Exception as e:
                 current_app.logger.error(f"Error en Mis Bandejas: {e}")
+                import traceback
+                current_app.logger.error(f"Traceback: {traceback.format_exc()}")
                 page.screenshot(path="mis_bandejas_error.png")
             
-            # === PASO 2: BUSCAR EN TODOS LOS TRÁMITES (SOLO LOS PENDIENTES) ===
+            # === PASO 2: BUSCAR EN TODOS LOS TRÁMITES (SOLO PENDIENTES) ===
             if gops_pendientes:
-                current_app.logger.info(f"=== PASO 2: BUSCANDO EN TODOS LOS TRÁMITES ===")
-                current_app.logger.info(f"Solo buscando GOP pendientes: {list(gops_pendientes)}")
+                current_app.logger.info(f"=== BUSCANDO EN TODOS LOS TRÁMITES ===")
+                current_app.logger.info(f"Buscando GOP pendientes: {list(gops_pendientes)}")
                 
                 try:
-                    # Buscar cada GOP pendiente individualmente usando filtro
                     encontrados_todos_totales = {}
                     
                     for gop_numero in gops_pendientes:
-                        current_app.logger.info(f"DEBUG: Buscando GOP {gop_numero} en Todos los Trámites...")
+                        current_app.logger.info(f"Buscando GOP {gop_numero}...")
                         
-                        # Navegar a la página
-                        page.goto(ALL_FORMALITIES_URL, wait_until="networkidle")
-                        current_app.logger.info(f"DEBUG: URL actual: {page.url}")
-                        page.wait_for_timeout(3000)
+                        # Navegar a la página con más tiempo
+                        page.goto(ALL_FORMALITIES_URL, wait_until="networkidle", timeout=60000)
+                        page.wait_for_timeout(5000)
                         
-                        # Buscar campo de filtro por "Nro. Sistema" o similar
+                        # Buscar y aplicar filtro
                         filtro_aplicado = False
-                        
-                        # Intentar diferentes selectores para el campo de filtro
-                        selectores_filtro = [
-                            'input[name*="numero"]',
-                            'input[name*="sistema"]', 
-                            'input[name*="nro"]',
-                            'input[placeholder*="número" i]',
-                            'input[placeholder*="sistema" i]',
+                        filtro_selectores = [
+                            'input[name*="nro" i]',
                             'input[placeholder*="nro" i]',
-                            'input[placeholder*="Número"]',
-                            'input[placeholder*="Sistema"]',
-                            'input[placeholder*="Nro"]',
-                            'input[id*="numero"]',
-                            'input[id*="sistema"]',
-                            'input[id*="nro"]',
-                            '.search-input',
-                            '[data-attribute="nro_sistema"]',
-                            'input[type="text"]'
+                            'input[placeholder*="GOP" i]',
+                            'input#formality-nro_sistema',
+                            'input[name="Formality[nro_sistema]"]'
                         ]
                         
-                        for selector in selectores_filtro:
+                        for selector in filtro_selectores:
                             try:
-                                filtro_elements = page.locator(selector)
-                                count = filtro_elements.count()
-                                
-                                if count > 0:
-                                    current_app.logger.info(f"DEBUG: Encontrados {count} elementos con selector: {selector}")
+                                if page.locator(selector).count() > 0:
+                                    current_app.logger.info(f"Aplicando filtro con selector: {selector}")
+                                    page.fill(selector, gop_numero)
                                     
-                                    # Probar cada elemento encontrado
-                                    for i in range(count):
+                                    # Buscar y hacer click en botón de búsqueda
+                                    search_buttons = [
+                                        'button[type="submit"]',
+                                        'button:has-text("Buscar")',
+                                        'button:has-text("Filtrar")',
+                                        '.btn-primary[type="submit"]'
+                                    ]
+                                    
+                                    for btn_selector in search_buttons:
                                         try:
-                                            filtro_element = filtro_elements.nth(i)
-                                            
-                                            # Verificar si es visible y habilitado
-                                            if filtro_element.is_visible() and filtro_element.is_enabled():
-                                                current_app.logger.info(f"DEBUG: Intentando filtro con selector: {selector} (elemento {i})")
-                                                
-                                                # Limpiar y escribir el GOP
-                                                filtro_element.clear()
-                                                filtro_element.fill(gop_numero)
-                                                current_app.logger.info(f"DEBUG: Escrito '{gop_numero}' en filtro")
-                                                
-                                                # Buscar botón de búsqueda o presionar Enter
-                                                try:
-                                                    # Intentar presionar Enter
-                                                    filtro_element.press("Enter")
-                                                    current_app.logger.info("DEBUG: Presionado Enter en filtro")
-                                                except:
-                                                    # Si no funciona Enter, buscar botón
-                                                    botones_buscar = [
-                                                        'button[type="submit"]',
-                                                        'button:has-text("Buscar")',
-                                                        'button:has-text("Filtrar")',
-                                                        'button:has-text("Search")',
-                                                        '.btn-search',
-                                                        '.search-btn',
-                                                        'input[type="submit"]'
-                                                    ]
-                                                    
-                                                    for btn_selector in botones_buscar:
-                                                        try:
-                                                            btn = page.locator(btn_selector).first
-                                                            if btn.count() > 0 and btn.is_visible():
-                                                                btn.click()
-                                                                current_app.logger.info(f"DEBUG: Clicked botón búsqueda: {btn_selector}")
-                                                                break
-                                                        except:
-                                                            continue
-                                                
-                                                # Esperar a que se aplique el filtro
-                                                page.wait_for_timeout(3000)
-                                                page.wait_for_load_state("networkidle")
-                                                
-                                                filtro_aplicado = True
-                                                current_app.logger.info(f"DEBUG: ✓ Filtro aplicado para GOP {gop_numero}")
+                                            if page.locator(btn_selector).count() > 0:
+                                                page.click(btn_selector)
                                                 break
-                                            
-                                        except Exception as e:
-                                            current_app.logger.debug(f"DEBUG: Elemento {i} falló: {e}")
+                                        except:
                                             continue
                                     
-                                    if filtro_aplicado:
-                                        break
-                                        
+                                    # Esperar resultados
+                                    page.wait_for_timeout(3000)
+                                    filtro_aplicado = True
+                                    break
                             except Exception as e:
-                                current_app.logger.debug(f"DEBUG: Selector {selector} falló: {e}")
+                                current_app.logger.debug(f"Selector {selector} falló: {e}")
                                 continue
                         
                         if not filtro_aplicado:
-                            current_app.logger.warning(f"DEBUG: ✗ No se pudo aplicar filtro para GOP {gop_numero}")
-                            page.screenshot(path=f"debug_filtro_fallo_{gop_numero}.png")
+                            current_app.logger.warning(f"No se pudo aplicar filtro para GOP {gop_numero}")
+                            continue
                         
-                        # Buscar en la tabla después del filtro
-                        current_app.logger.info(f"DEBUG: Buscando GOP {gop_numero} en tabla filtrada...")
-                        page.wait_for_timeout(2000)
-                        
-                        # Buscar en la tabla (ahora debería tener pocos resultados)
+                        # Buscar en tabla filtrada
                         encontrados_gop = _buscar_gops_en_pagina_simple(page, [gop_numero], "Todos los Trámites", gop_numero)
                         
                         if encontrados_gop:
-                            current_app.logger.info(f"DEBUG: ✓ GOP {gop_numero} encontrado en Todos los Trámites")
+                            current_app.logger.info(f"✓ GOP {gop_numero} encontrado")
                             encontrados_todos_totales.update(encontrados_gop)
                         else:
-                            current_app.logger.warning(f"DEBUG: ✗ GOP {gop_numero} NO encontrado en Todos los Trámites")
+                            current_app.logger.warning(f"✗ GOP {gop_numero} NO encontrado")
                     
-                    current_app.logger.info(f"✓ Encontrados en Todos los Trámites: {len(encontrados_todos_totales)} registros")
-                    
-                    # Agregar a resultados
+                    # Agregar resultados
                     for gop_key, datos in encontrados_todos_totales.items():
                         resultados[gop_key] = datos
+                    
+                    current_app.logger.info(f"✓ Total en Todos los Trámites: {len(encontrados_todos_totales)}")
                     
                 except Exception as e:
                     current_app.logger.error(f"Error en Todos los Trámites: {e}")
                     import traceback
                     current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-                    page.screenshot(path="todos_tramites_error.png")
             else:
-                current_app.logger.info("=== TODOS LOS GOP ENCONTRADOS EN MIS BANDEJAS ===")
-                current_app.logger.info("✓ No es necesario buscar en Todos los Trámites")
+                current_app.logger.info("✓ Todos los GOP encontrados en Mis Bandejas")
         
         finally:
             browser.close()
+            current_app.logger.info("=== NAVEGADOR CERRADO ===")
     
+    current_app.logger.info(f"=== SCRAPING COMPLETADO ===")
     current_app.logger.info(f"Total registros encontrados: {len(resultados)}")
     
-    # LOGGING DETALLADO de los resultados
-    gops_unicos_encontrados = set()
-    gops_desde_bandejas = set()
-    gops_desde_todos_tramites = set()
-    
+    # Log detallado de resultados
+    gops_unicos = set()
     for gop_key, datos in resultados.items():
-        gop_numero = datos['nro_sistema']
-        gops_unicos_encontrados.add(gop_numero)
-        
-        if datos['fuente'] == 'Mis Bandejas':
-            gops_desde_bandejas.add(gop_numero)
-        else:
-            gops_desde_todos_tramites.add(gop_numero)
-        
-        current_app.logger.info(f"Resultado: {gop_numero} desde {datos['fuente']} - Usuario: {datos['usuario_asignado']}")
+        gops_unicos.add(datos['nro_sistema'])
+        current_app.logger.info(f"  {datos['nro_sistema']} - {datos['fuente']} - {datos['usuario_asignado']}")
     
-    current_app.logger.info(f"GOP únicos encontrados: {len(gops_unicos_encontrados)} de {len(gop_list)} buscados")
-    current_app.logger.info(f"  - Desde Mis Bandejas: {list(gops_desde_bandejas)}")
-    current_app.logger.info(f"  - Desde Todos los Trámites: {list(gops_desde_todos_tramites)}")
-    
-    # Mostrar GOP no encontrados
-    gops_no_encontrados = set(gop_list) - gops_unicos_encontrados
+    gops_no_encontrados = set(gop_list) - gops_unicos
     if gops_no_encontrados:
-        current_app.logger.warning(f"GOP NO encontrados en ninguna fuente: {list(gops_no_encontrados)}")
+        current_app.logger.warning(f"GOP NO encontrados: {list(gops_no_encontrados)}")
     
     return resultados
 
@@ -1046,151 +1048,216 @@ def _buscar_gops_en_pagina_multiple(page, gops_buscados, fuente):
 
 
 def _perform_login(page, user, pw):
-    """Realiza el login en el sistema."""
-    current_app.logger.info("Iniciando proceso de login...")
+    """Realiza el login en el sistema - Versión optimizada para Railway."""
+    current_app.logger.info("=== INICIANDO PROCESO DE LOGIN ===")
     
     # Verificar que estamos en la página correcta
-    if "login" not in page.url.lower():
-        raise RuntimeError(f"No se pudo acceder a la página de login. URL actual: {page.url}")
+    current_url = page.url
+    current_app.logger.info(f"URL actual: {current_url}")
     
-    # Llenar usuario - probar múltiples selectores
+    if "login" not in current_url.lower():
+        current_app.logger.error(f"No estamos en página de login. URL: {current_url}")
+        # Intentar navegar de nuevo
+        page.goto("https://posadas.gestiondeobrasprivadas.com.ar/frontend/web/site/login", 
+                 wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(3000)
+    
+    # Tomar screenshot para debug
+    try:
+        page.screenshot(path="login_page_before.png")
+        current_app.logger.info("Screenshot de página de login tomado")
+    except:
+        pass
+    
+    # PASO 1: Llenar usuario
+    current_app.logger.info("Llenando campo de usuario...")
     filled_user = False
+    
+    # Lista expandida de selectores para el campo usuario
     user_selectors = [
         'input[name="LoginForm[username]"]',
         'input#loginform-username',
+        '#loginform-username',
         'input[name="username"]',
-        'input[type="text"]',
-        'input[placeholder*="usuario" i]',
-        'input[placeholder*="nombre" i]'
+        'input[type="text"][name*="user" i]',
+        'input[type="text"][placeholder*="usuario" i]',
+        'input[type="text"]:not([type="hidden"])',
+        'form input[type="text"]:first-of-type'
     ]
     
     for selector in user_selectors:
         try:
-            if page.locator(selector).count() > 0:
-                page.fill(selector, user)
+            element = page.locator(selector).first
+            if element and element.is_visible():
+                element.click()  # Hacer click primero
+                page.wait_for_timeout(500)
+                element.fill("")  # Limpiar
+                page.wait_for_timeout(500)
+                element.type(user, delay=100)  # Escribir con delay
                 filled_user = True
-                current_app.logger.info(f"Usuario llenado con selector: {selector}")
+                current_app.logger.info(f"✓ Usuario llenado con selector: {selector}")
                 break
         except Exception as e:
-            current_app.logger.debug(f"Falló selector de usuario {selector}: {e}")
+            current_app.logger.debug(f"Selector usuario falló {selector}: {e}")
             continue
     
     if not filled_user:
-        page.screenshot(path="login_user_debug.png")
-        raise RuntimeError("No se pudo llenar el campo de usuario")
+        current_app.logger.error("ERROR: No se pudo llenar el campo de usuario")
+        page.screenshot(path="login_user_error.png")
+        raise RuntimeError("No se pudo llenar el campo de usuario. Revisa las credenciales.")
     
-    # Esperar un poco después de llenar usuario
-    page.wait_for_timeout(500)
+    # Esperar un poco
+    page.wait_for_timeout(1000)
     
-    # Llenar contraseña - probar múltiples selectores
+    # PASO 2: Llenar contraseña
+    current_app.logger.info("Llenando campo de contraseña...")
     filled_pass = False
+    
+    # Lista expandida de selectores para contraseña
     pass_selectors = [
         'input[name="LoginForm[password]"]',
         'input#loginform-password',
+        '#loginform-password',
         'input[name="password"]',
         'input[type="password"]',
-        'input[placeholder*="contraseña" i]',
-        'input[placeholder*="password" i]'
+        'input[type="password"]:not([type="hidden"])',
+        'form input[type="password"]:first-of-type'
     ]
     
     for selector in pass_selectors:
         try:
-            if page.locator(selector).count() > 0:
-                page.fill(selector, pw)
+            element = page.locator(selector).first
+            if element and element.is_visible():
+                element.click()  # Hacer click primero
+                page.wait_for_timeout(500)
+                element.fill("")  # Limpiar
+                page.wait_for_timeout(500)
+                element.type(pw, delay=100)  # Escribir con delay
                 filled_pass = True
-                current_app.logger.info(f"Contraseña llenada con selector: {selector}")
+                current_app.logger.info(f"✓ Contraseña llenada con selector: {selector}")
                 break
         except Exception as e:
-            current_app.logger.debug(f"Falló selector de contraseña {selector}: {e}")
+            current_app.logger.debug(f"Selector contraseña falló {selector}: {e}")
             continue
     
     if not filled_pass:
-        page.screenshot(path="login_pass_debug.png")
+        current_app.logger.error("ERROR: No se pudo llenar el campo de contraseña")
+        page.screenshot(path="login_pass_error.png")
         raise RuntimeError("No se pudo llenar el campo de contraseña")
     
-    # Esperar un poco después de llenar contraseña
-    page.wait_for_timeout(500)
+    # Esperar un poco
+    page.wait_for_timeout(1000)
     
-    # Hacer click en submit - probar múltiples selectores
+    # PASO 3: Hacer submit
+    current_app.logger.info("Enviando formulario de login...")
     submitted = False
-    submit_selectors = [
-        'button[type="submit"]',
-        'input[type="submit"]',
-        'button:has-text("Ingresar")',
-        'button:has-text("Login")',
-        'button:has-text("Entrar")',
-        '.btn-primary',
-        '.btn[type="submit"]',
-        'form button'
+    
+    # Opciones de submit
+    submit_methods = [
+        # Método 1: Click en botón submit
+        lambda: page.locator('button[type="submit"]').first.click(),
+        lambda: page.locator('input[type="submit"]').first.click(),
+        lambda: page.locator('button:has-text("Ingresar")').first.click(),
+        lambda: page.locator('button:has-text("Login")').first.click(),
+        lambda: page.locator('.btn-primary[type="submit"]').first.click(),
+        # Método 2: Presionar Enter en el campo de contraseña
+        lambda: page.locator('input[type="password"]').first.press("Enter"),
+        # Método 3: Submit del formulario
+        lambda: page.evaluate('document.querySelector("form").submit()'),
     ]
     
-    for selector in submit_selectors:
+    for i, method in enumerate(submit_methods):
         try:
-            if page.locator(selector).count() > 0:
-                current_app.logger.info(f"Intentando submit con selector: {selector}")
-                page.click(selector)
-                submitted = True
-                current_app.logger.info(f"Submit exitoso con selector: {selector}")
-                break
+            current_app.logger.info(f"Intentando método de submit #{i+1}")
+            method()
+            submitted = True
+            current_app.logger.info(f"✓ Submit exitoso con método #{i+1}")
+            break
         except Exception as e:
-            current_app.logger.debug(f"Falló selector de submit {selector}: {e}")
+            current_app.logger.debug(f"Método #{i+1} falló: {e}")
             continue
     
     if not submitted:
-        page.screenshot(path="login_submit_debug.png")
-        raise RuntimeError("No se pudo hacer click en el botón de login")
+        current_app.logger.error("ERROR: No se pudo enviar el formulario")
+        page.screenshot(path="login_submit_error.png")
+        raise RuntimeError("No se pudo enviar el formulario de login")
     
-    # Esperar a que se complete el login
-    current_app.logger.info("Esperando respuesta del login...")
-    page.wait_for_load_state("networkidle")
-    page.wait_for_timeout(3000)
+    # PASO 4: Esperar respuesta del servidor
+    current_app.logger.info("Esperando respuesta del servidor...")
     
-    # Verificar que el login fue exitoso
+    try:
+        # Esperar navegación o cambio de URL
+        page.wait_for_url(lambda url: "login" not in url.lower(), timeout=30000)
+        current_app.logger.info("✓ Navegación detectada")
+    except:
+        # Si no hay navegación, esperar un poco y verificar
+        current_app.logger.info("No se detectó navegación automática, esperando...")
+        page.wait_for_timeout(10000)
+    
+    # Verificar login exitoso
     current_url = page.url
     current_app.logger.info(f"URL después del login: {current_url}")
     
-    # Verificar diferentes indicadores de login exitoso
+    # Verificar si seguimos en login
     if "login" in current_url.lower():
-        # Tomar screenshot para debug
-        page.screenshot(path="login_failed_debug.png")
+        # Buscar mensajes de error
+        error_messages = []
+        error_selectors = [
+            '.alert-danger',
+            '.error',
+            '.alert-error',
+            '.help-block-error',
+            '.invalid-feedback',
+            '[class*="error"]'
+        ]
         
-        # Verificar si hay mensajes de error en la página
-        try:
-            error_messages = page.locator('.alert-danger, .error, .alert-error, .help-block-error').all_inner_texts()
-            if error_messages:
-                current_app.logger.error(f"Mensajes de error en login: {error_messages}")
-        except:
-            pass
+        for selector in error_selectors:
+            try:
+                elements = page.locator(selector).all()
+                for elem in elements:
+                    text = elem.inner_text().strip()
+                    if text:
+                        error_messages.append(text)
+            except:
+                pass
         
-        raise RuntimeError("Login falló - aún en página de login. Verificá credenciales en el .env")
+        if error_messages:
+            current_app.logger.error(f"Errores en login: {error_messages}")
+            raise RuntimeError(f"Login falló: {'; '.join(error_messages)}")
+        
+        current_app.logger.warning("Aún en página de login pero sin errores visibles")
     
-    # Verificar que hay contenido de usuario logueado
-    page.wait_for_timeout(2000)
-    
-    # Buscar indicadores de login exitoso
-    login_indicators = [
+    # Verificar indicadores de éxito
+    success_indicators = [
         'a:has-text("Salir")',
         'a:has-text("Logout")',
-        'a:has-text("Cerrar Sesión")',
+        'a:has-text("Cerrar")',
+        'button:has-text("Salir")',
         '.user-menu',
-        '.logout',
-        'nav .dropdown'
+        '.navbar',
+        '#main-menu'
     ]
     
-    logged_in = False
-    for indicator in login_indicators:
+    login_success = False
+    for indicator in success_indicators:
         try:
             if page.locator(indicator).count() > 0:
-                logged_in = True
-                current_app.logger.info(f"Login confirmado por indicator: {indicator}")
+                login_success = True
+                current_app.logger.info(f"✓ Login confirmado por: {indicator}")
                 break
         except:
             continue
     
-    if not logged_in:
-        current_app.logger.warning("No se encontraron indicadores claros de login exitoso, pero continuando...")
+    if not login_success:
+        current_app.logger.warning("⚠ No se encontraron indicadores claros de login, pero continuando...")
+    else:
+        current_app.logger.info("✓✓✓ LOGIN EXITOSO ✓✓✓")
     
-    current_app.logger.info("Login completado exitosamente")
+    # Screenshot final
+    try:
+        page.screenshot(path="login_success.png")
+    except:
+        pass
 
 
 # === FUNCIONES HEREDADAS (PARA COMPATIBILIDAD) ===
