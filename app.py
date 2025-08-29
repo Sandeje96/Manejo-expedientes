@@ -11,12 +11,25 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from concurrent.futures import ThreadPoolExecutor
+from uuid import uuid4
+import threading
 
 
 # Extensiones globales
 _db = SQLAlchemy()
 _migrate = Migrate()
 login_manager = LoginManager()
+TASKS = {}
+TASKS_LOCK = threading.Lock()
+EXECUTOR = ThreadPoolExecutor(max_workers=1)  # 1 hilo evita pelearse con Gunicorn
+
+def _set_task_state(task_id, **kwargs):
+    with TASKS_LOCK:
+        TASKS.setdefault(task_id, {})
+        TASKS[task_id].update(kwargs)
+        TASKS[task_id].setdefault("updated_at", datetime.utcnow().isoformat())
+        TASKS[task_id]["updated_at"] = datetime.utcnow().isoformat()
 
 def init_login_manager(app):
     """Inicializa Flask-Login"""
@@ -83,6 +96,40 @@ def create_app():
         s = f"{n:,.2f}"                  # 1,234,567.89
         s = s.replace(",", "X").replace(".", ",").replace("X", ".")
         return f"$ {s}"
+    
+    from flask import jsonify, request
+    import traceback
+
+    # Supongamos que en gop_integration existe una función que vamos a preparar en el Paso 2:
+    # sync_all_expedientes(update_progress: callable) -> None
+    from gop_integration import sync_all_expedientes
+
+    @app.route("/gop/sync", methods=["POST"])
+    def gop_sync():
+        # Crea una tarea y devuelve inmediatamente
+        task_id = str(uuid4())
+        _set_task_state(task_id, status="queued", progress=0, total=None, ok=0, fail=0, message="En cola")
+        def runner():
+            _set_task_state(task_id, status="running", message="Iniciando...")
+            try:
+                def update_progress(current, total, ok, fail, note=None):
+                    msg = note or "Procesando..."
+                    _set_task_state(task_id, status="running", progress=current, total=total, ok=ok, fail=fail, message=msg)
+                sync_all_expedientes(update_progress=update_progress)
+                _set_task_state(task_id, status="done", message="Completado")
+            except Exception as e:
+                _set_task_state(task_id, status="error", message=f"Error: {e}\n{traceback.format_exc()}")
+
+        EXECUTOR.submit(runner)
+        return jsonify({"task_id": task_id}), 202
+
+    @app.route("/gop/sync/status/<task_id>", methods=["GET"])
+    def gop_sync_status(task_id):
+        with TASKS_LOCK:
+            state = TASKS.get(task_id)
+        if not state:
+            return jsonify({"error": "task_id no encontrado"}), 404
+        return jsonify({"task_id": task_id, **state}), 200
     
     @app.before_request
     def _limitar_no_admin():

@@ -127,6 +127,62 @@
   </div>
 </div>
 
+<button id="btn-sync">Sincronizar GOP</button>
+
+<div id="gop-status" style="margin-top:1rem; display:none;">
+  <div><strong>Estado:</strong> <span id="gop-status-text">-</span></div>
+  <div id="gop-progress-wrap" style="width:100%; background:#eee; height:10px; margin-top:6px;">
+    <div id="gop-progress-bar" style="width:0%; height:10px; background:#2d6cdf;"></div>
+  </div>
+  <div style="margin-top:6px;">
+    <span id="gop-counts"></span>
+  </div>
+</div>
+
+<script>
+(async function(){
+  const btn = document.getElementById('btn-sync');
+  const box = document.getElementById('gop-status');
+  const txt = document.getElementById('gop-status-text');
+  const bar = document.getElementById('gop-progress-bar');
+  const counts = document.getElementById('gop-counts');
+
+  function render(state){
+    box.style.display = 'block';
+    txt.textContent = state.message ? `${state.status} — ${state.message}` : state.status;
+    const total = state.total || 0;
+    const curr = state.progress || 0;
+    const pct = total > 0 ? Math.round((curr/total)*100) : (state.status === 'done' ? 100 : 0);
+    bar.style.width = pct + '%';
+    counts.textContent = `Progreso: ${curr}/${total || '¿?'} — OK: ${state.ok||0} — Fallos: ${state.fail||0}`;
+  }
+
+  async function poll(taskId){
+    while(true){
+      const r = await fetch(`/gop/sync/status/${taskId}`);
+      const s = await r.json();
+      render(s);
+      if (s.status === 'done' || s.status === 'error') break;
+      await new Promise(res => setTimeout(res, 2500));
+    }
+  }
+
+  btn?.addEventListener('click', async () => {
+    btn.disabled = true;
+    try{
+      const r = await fetch('/gop/sync', {method: 'POST'});
+      if(!r.ok){ throw new Error('No se pudo iniciar la sincronización'); }
+      const {task_id} = await r.json();
+      await poll(task_id);
+    }catch(e){
+      alert(e.message || e);
+    }finally{
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
 <!-- Info del proceso -->
 <div class="mt-4">
   <div class="card card-lux">

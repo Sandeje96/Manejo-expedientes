@@ -6,6 +6,11 @@ from datetime import datetime, date
 from flask import current_app
 from pathlib import Path
 
+# ==== NUEVO: util nulo para progreso, mantiene compatibilidad ====
+def _noop_progress(curr, total, ok, fail, note=None):
+    pass
+
+
 def _ensure_gop_imports():
     """Configura los imports del módulo GOP."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +20,7 @@ def _ensure_gop_imports():
         sys.path.insert(0, current_dir)
     if gop_dir not in sys.path:
         sys.path.insert(0, gop_dir)
+
 
 def _determinar_bandeja_por_usuario(usuario_gop: str, fuente: str = "") -> str:
     """
@@ -53,6 +59,7 @@ def _determinar_bandeja_por_usuario(usuario_gop: str, fuente: str = "") -> str:
         # Si no coincide con ninguno específico, va a profesional
         return 'profesional'
 
+
 def _limpiar_campos_bandeja(expediente_id, db_session):
     """
     Limpia todos los campos de bandejas específicas para un expediente.
@@ -90,6 +97,7 @@ def _limpiar_campos_bandeja(expediente_id, db_session):
         {**campos_a_limpiar, "expediente_id": expediente_id}
     )
 
+
 def _parsear_fecha(fecha_str):
     """Parsea una fecha string a objeto date."""
     if not fecha_str or str(fecha_str).strip() in ['', 'nan', 'None']:
@@ -114,12 +122,30 @@ def _parsear_fecha(fecha_str):
     
     return None
 
-def sync_gop_data():
+
+# ========= NUEVO: API pensada para el botón "Sincronizar GOP" =========
+def sync_all_expedientes(update_progress):
+    """
+    Orquesta la sincronización GOP completa con callback de progreso.
+    Pensada para ser llamada desde un hilo en segundo plano.
+    
+    - update_progress(curr, total, ok, fail, note?)
+    """
+    # Reutilizamos la lógica existente y agregamos reporte de progreso
+    return sync_gop_data(update_progress=update_progress)
+
+
+def sync_gop_data(update_progress=None):
     """
     Ejecuta el scraper GOP y actualiza los expedientes con información distribuida por bandejas.
     Incluye lógica de fuente: "Todos los Trámites" -> siempre Bandeja PROFESIONAL.
     EXCLUYE expedientes en formato PAPEL del proceso de sincronización.
+    
+    Si se provee update_progress(curr, total, ok, fail, note),
+    se reporta progreso a cada GOP procesado.
     """
+    _report = update_progress or _noop_progress
+
     try:
         from app import _db
         
@@ -138,9 +164,12 @@ def sync_gop_data():
         ).fetchall()
         
         gop_list = [row[0].strip() for row in gop_numbers if row[0] and row[0].strip()]
-        current_app.logger.info(f"DIAGNÓSTICO: GOP encontrados en CPIM (solo digitales): {len(gop_list)} -> {gop_list}")
+        total_gops = len(gop_list)
+        _report(0, total_gops, 0, 0, "Listando expedientes digitales con GOP...")
+        current_app.logger.info(f"DIAGNÓSTICO: GOP encontrados en CPIM (solo digitales): {total_gops} -> {gop_list}")
         
         if not gop_list:
+            _report(0, 0, 0, 0, "No hay expedientes digitales con números GOP")
             return {
                 'total_gop_encontrados': 0,
                 'expedientes_actualizados': 0,
@@ -154,10 +183,9 @@ def sync_gop_data():
         
         # === PASO 2: VERIFICAR CAMPOS EN BD ===
         current_app.logger.info("=== DIAGNÓSTICO: VERIFICANDO CAMPOS EN BD ===")
-        
         try:
             # Verificar que los nuevos campos existen
-            test_query = _db.session.execute(
+            _db.session.execute(
                 _db.text("""
                     SELECT bandeja_cpim_nombre, bandeja_imlauer_nombre, 
                            bandeja_onetto_nombre, bandeja_profesional_nombre
@@ -167,6 +195,7 @@ def sync_gop_data():
             current_app.logger.info("✓ Campos de bandejas específicas encontrados en BD")
         except Exception as e:
             current_app.logger.error(f"✗ ERROR: Campos de bandejas NO encontrados: {e}")
+            _report(0, total_gops, 0, 0, "Faltan columnas de bandejas en BD")
             return {
                 'error': f'Campos de bandejas no encontrados en BD: {e}',
                 'total_gop_encontrados': 0,
@@ -179,8 +208,9 @@ def sync_gop_data():
                 'errores': [f'Campos faltantes: {e}']
             }
         
-        # === PASO 3: EJECUTAR SCRAPER ===
-        current_app.logger.info("=== DIAGNÓSTICO: EJECUTANDO SCRAPER ===")
+        # === PASO 3: EJECUTAR SCRAPER UNA SOLA VEZ PARA TODA LA LISTA ===
+        current_app.logger.info("=== DIAGNÓSTICO: EJECUTANDO SCRAPER (MIS BANDEJAS + PENDIENTES EN TODOS LOS TRÁMITES) ===")
+        _report(0, total_gops, 0, 0, "Scrapeando desde GOP (esto puede tardar)...")
         resultados_por_gop = _buscar_gops_especificos(gop_list)
         
         current_app.logger.info(f"DIAGNÓSTICO: Resultados del scraper: {len(resultados_por_gop)} registros")
@@ -209,7 +239,13 @@ def sync_gop_data():
             'errores': []
         }
         
+        ok = 0
+        fail = 0
+        curr = 0
+        total = len(gop_agrupados)
+
         for gop_numero, lista_datos in gop_agrupados.items():
+            curr += 1
             try:
                 current_app.logger.info(f"DIAGNÓSTICO: Procesando GOP {gop_numero}")
                 
@@ -223,6 +259,8 @@ def sync_gop_data():
                     error_msg = f"GOP {gop_numero} no encontrado en BD como expediente digital"
                     current_app.logger.warning(f"DIAGNÓSTICO: {error_msg}")
                     stats['errores'].append(error_msg)
+                    fail += 1
+                    _report(curr, total, ok, fail, f"No encontrado expediente digital para GOP {gop_numero}")
                     continue
                 
                 expediente_id = expediente_result[0]
@@ -233,6 +271,8 @@ def sync_gop_data():
                     error_msg = f"GOP {gop_numero} no es formato digital (formato: {formato}), omitiendo sincronización"
                     current_app.logger.warning(f"DIAGNÓSTICO: {error_msg}")
                     stats['errores'].append(error_msg)
+                    fail += 1
+                    _report(curr, total, ok, fail, f"Omitido (no digital) GOP {gop_numero}")
                     continue
                 
                 current_app.logger.info(f"DIAGNÓSTICO: Expediente digital ID {expediente_id} encontrado para GOP {gop_numero}")
@@ -337,7 +377,7 @@ def sync_gop_data():
                     }
                 )
                 
-                # NUEVO: Actualizar historial de bandejas
+                # NUEVO: Actualizar historial de bandejas (seguro, no rompe si no existe)
                 try:
                     current_app.logger.info(f"DIAGNÓSTICO: Actualizando historial para expediente digital {expediente_id}")
                     _actualizar_historial_tras_sincronizacion(expediente_id, datos_bandejas_historial)
@@ -347,6 +387,8 @@ def sync_gop_data():
                     # No fallar la sincronización por un error en el historial
                 
                 stats['expedientes_actualizados'] += 1
+                ok += 1
+                _report(curr, total, ok, fail, f"GOP {gop_numero} actualizado")
                 current_app.logger.info(f"DIAGNÓSTICO: ✓ Expediente digital {expediente_id} actualizado completamente")
                 
             except Exception as e:
@@ -355,6 +397,8 @@ def sync_gop_data():
                 stats['errores'].append(error_msg)
                 import traceback
                 current_app.logger.error(f"DIAGNÓSTICO: Traceback: {traceback.format_exc()}")
+                fail += 1
+                _report(curr, total, ok, fail, f"Fallo al actualizar GOP {gop_numero}")
         
         # Commit final
         current_app.logger.info("DIAGNÓSTICO: Realizando commit...")
@@ -362,12 +406,14 @@ def sync_gop_data():
         current_app.logger.info("DIAGNÓSTICO: ✓ Commit exitoso")
         
         current_app.logger.info(f"DIAGNÓSTICO: Estadísticas finales: {stats}")
+        _report(total, total, ok, fail, "Finalizado")
         return stats
         
     except Exception as e:
         current_app.logger.error(f"DIAGNÓSTICO: Error general en sync_gop_data: {e}")
         import traceback
         current_app.logger.error(f"DIAGNÓSTICO: Traceback completo: {traceback.format_exc()}")
+        _report(0, 0, 0, 1, f"Error general: {e}")
         return {
             'error': str(e),
             'total_gop_encontrados': 0,
@@ -379,6 +425,7 @@ def sync_gop_data():
             'bandejas_profesional': 0,
             'errores': [str(e)]
         }
+
 
 def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
     """
@@ -485,6 +532,7 @@ def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
         current_app.logger.warning(f"No se pudo actualizar historial para expediente {expediente_id}: {e}")
         # No propagar el error para que la sincronización continúe
 
+
 def _crear_nuevo_registro_historial(expediente_id, bandeja_tipo, nombre_bandeja, usuario, fecha_inicio):
     """
     Crea un nuevo registro en el historial de bandejas.
@@ -514,6 +562,7 @@ def _crear_nuevo_registro_historial(expediente_id, bandeja_tipo, nombre_bandeja,
     except Exception as e:
         _db.session.rollback()
         current_app.logger.warning(f"Error creando registro historial: {e}")
+
 
 def _buscar_gops_en_pagina_simple(page, gops_buscados, fuente, gop_especifico):
     """
@@ -592,6 +641,7 @@ def _buscar_gops_en_pagina_simple(page, gops_buscados, fuente, gop_especifico):
     
     return encontrados
     
+
 def _buscar_gops_especificos(gop_list):
     """
     Busca números GOP específicos con lógica optimizada:
@@ -864,6 +914,7 @@ def _buscar_gops_especificos(gop_list):
     
     return resultados
 
+
 def _buscar_gops_en_pagina_multiple(page, gops_buscados, fuente):
     """
     Busca números GOP específicos en la página actual.
@@ -992,6 +1043,7 @@ def _buscar_gops_en_pagina_multiple(page, gops_buscados, fuente):
     
     current_app.logger.info(f"[{fuente}] DEBUG: Búsqueda completada. Encontrados: {len(encontrados)} registros")
     return encontrados
+
 
 def _perform_login(page, user, pw):
     """Realiza el login en el sistema."""
@@ -1140,6 +1192,7 @@ def _perform_login(page, user, pw):
     
     current_app.logger.info("Login completado exitosamente")
 
+
 # === FUNCIONES HEREDADAS (PARA COMPATIBILIDAD) ===
 
 def _run_gop_scraper():
@@ -1156,6 +1209,7 @@ def _run_gop_scraper():
     except ImportError:
         # Si falla, ejecutamos el código directamente
         return _run_scraper_direct()
+
 
 def _run_scraper_direct():
     """Versión directa del scraper sin imports de módulos."""
