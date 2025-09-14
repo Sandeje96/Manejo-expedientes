@@ -778,6 +778,69 @@ def create_app():
         item = Expediente.query.get_or_404(item_id)
         return render_template("expediente_form.html", item=item, formatos=FORMATO_PERMITIDOS, profesiones=PROFESIONES_PERMITIDAS, tipos_trabajo=TIPOS_TRABAJO_PERMITIDOS)
     
+    @app.get("/api/sugerencias-profesionales")
+    @login_required
+    def sugerencias_profesionales():
+        """API para obtener sugerencias de nombres de profesionales"""
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:  # Solo buscar si hay al menos 2 caracteres
+            return jsonify([])
+        
+        # Buscar profesionales únicos que coincidan
+        like = f"%{q}%"
+        
+        # Buscar en profesionales principales
+        principales = _db.session.query(Expediente.nombre_profesional)\
+            .filter(Expediente.nombre_profesional.ilike(like))\
+            .filter(Expediente.nombre_profesional.isnot(None))\
+            .distinct()\
+            .limit(10)\
+            .all()
+        
+        # Buscar en profesionales adicionales
+        adicionales = _db.session.query(ProfesionalAdicional.nombre_profesional)\
+            .filter(ProfesionalAdicional.nombre_profesional.ilike(like))\
+            .filter(ProfesionalAdicional.nombre_profesional.isnot(None))\
+            .distinct()\
+            .limit(10)\
+            .all()
+        
+        # Combinar y eliminar duplicados
+        todos = set()
+        for (nombre,) in principales:
+            if nombre:
+                todos.add(nombre)
+        for (nombre,) in adicionales:
+            if nombre:
+                todos.add(nombre)
+        
+        # Ordenar alfabéticamente y retornar
+        sugerencias = sorted(list(todos))[:10]  # Máximo 10 sugerencias
+        return jsonify(sugerencias)
+
+    @app.get("/api/sugerencias-comitentes")
+    @login_required
+    def sugerencias_comitentes():
+        """API para obtener sugerencias de nombres de comitentes"""
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:  # Solo buscar si hay al menos 2 caracteres
+            return jsonify([])
+        
+        # Buscar comitentes únicos que coincidan
+        like = f"%{q}%"
+        
+        comitentes = _db.session.query(Expediente.nombre_comitente)\
+            .filter(Expediente.nombre_comitente.ilike(like))\
+            .filter(Expediente.nombre_comitente.isnot(None))\
+            .distinct()\
+            .limit(10)\
+            .all()
+        
+        # Convertir a lista
+        sugerencias = [nombre for (nombre,) in comitentes if nombre]
+        sugerencias = sorted(sugerencias)[:10]  # Ordenar y limitar a 10
+        
+        return jsonify(sugerencias)
     
     @app.post("/gop/sincronizar")
     def sincronizar_gop():

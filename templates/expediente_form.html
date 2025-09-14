@@ -669,137 +669,188 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  // --- Toggle de sección digital ---
+  // --- Toggle para sección Digital ---
   const formatoSelect = document.getElementById('formato');
   const digitalExtra = document.getElementById('digital-extra');
 
-  function actualizarDigitalExtra() {
-    if (!formatoSelect || !digitalExtra) return;
-    digitalExtra.style.display = (formatoSelect.value === 'Digital') ? 'block' : 'none';
-  }
-
-  if (formatoSelect) {
-    formatoSelect.addEventListener('change', actualizarDigitalExtra);
-    actualizarDigitalExtra(); // estado inicial
-  }
-
-  // --- Agregar / Eliminar profesionales adicionales ---
-  window.agregarProfesional = function () {
-    const container = document.getElementById('profesionales-adicionales');
-    if (!container) return;
-
-    const profesionalDiv = document.createElement('div');
-    profesionalDiv.className = 'additional-professional';
-    profesionalDiv.style.opacity = '0';
-    profesionalDiv.style.transform = 'translateY(-10px)';
-
-    profesionalDiv.innerHTML = `
-      <button type="button" class="remove-professional" onclick="eliminarProfesional(this)">✕</button>
-      <div class="row g-2">
-        <div class="col-md-6">
-          <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
-                 placeholder="Nombre del profesional" autocomplete="off">
-        </div>
-        <div class="col-md-6">
-          <select name="profesionales_adicionales_profesion[]" class="form-select">
-            <option value="">Seleccionar profesión</option>
-            {% for p in profesiones %}
-              <option value="{{ p }}">{{ p }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-    `;
-
-    container.appendChild(profesionalDiv);
-
-    // Animación de aparición
-    requestAnimationFrame(() => {
-      profesionalDiv.style.transition = 'all 0.3s ease';
-      profesionalDiv.style.opacity = '1';
-      profesionalDiv.style.transform = 'translateY(0)';
-    });
-  };
-
-  window.eliminarProfesional = function (button) {
-    const profesionalDiv = button.closest('.additional-professional');
-    if (!profesionalDiv) return;
-    profesionalDiv.style.transition = 'all 0.3s ease';
-    profesionalDiv.style.opacity = '0';
-    profesionalDiv.style.transform = 'translateY(-10px)';
-    setTimeout(() => profesionalDiv.remove(), 300);
-  };
-
-  // --- Autocompletado simple con caché local ---
-  let profesionalCache = [
-    'Juan Carlos Rodriguez',
-    'María Elena Gonzalez',
-    'Roberto Miguel Silva',
-    'Ana Patricia Mendez',
-    'Carlos Eduardo López'
-  ];
-  let comitenteCache = [
-    'Construcciones ABC S.A.',
-    'Inmobiliaria Norte Ltda.',
-    'Desarrollo Urbano S.R.L.',
-    'José María Gutierrez',
-    'Emprendimientos del Sur'
-  ];
-
-  function setupAutocomplete(inputId, suggestionsId, cacheArray) {
-    const input = document.getElementById(inputId);
-    const suggestions = document.getElementById(suggestionsId);
-    if (!input || !suggestions) return;
-
-    function showSuggestions(matches) {
-      suggestions.innerHTML = '';
-      matches.forEach(match => {
-        const div = document.createElement('div');
-        div.className = 'autocomplete-suggestion';
-        div.textContent = match;
-        div.addEventListener('click', function () {
-          input.value = match;
-          suggestions.style.display = 'none';
-        });
-        suggestions.appendChild(div);
-      });
-      suggestions.style.display = 'block';
+  function toggleDigitalExtra() {
+    if (formatoSelect && digitalExtra) {
+      digitalExtra.style.display = (formatoSelect.value === 'Digital') ? 'block' : 'none';
     }
+  }
+  toggleDigitalExtra();
+  formatoSelect?.addEventListener('change', toggleDigitalExtra);
 
-    input.addEventListener('input', function () {
-      const query = this.value.trim();
-      if (query.length < 2) {
-        suggestions.style.display = 'none';
+  // ========= NUEVO: FUNCIONALIDAD DE AUTOCOMPLETADO =========
+  
+  // Función genérica para configurar autocompletado
+  function setupAutocomplete(inputId, suggestionsId, apiUrl) {
+    const input = document.getElementById(inputId);
+    const suggestionsDiv = document.getElementById(suggestionsId);
+    
+    if (!input || !suggestionsDiv) return;
+    
+    let timeoutId = null;
+    
+    // Función para mostrar sugerencias
+    function mostrarSugerencias(sugerencias) {
+      suggestionsDiv.innerHTML = '';
+      
+      if (sugerencias.length === 0) {
+        suggestionsDiv.style.display = 'none';
         return;
       }
-      const matches = cacheArray
-        .filter(item => item.toLowerCase().includes(query.toLowerCase()))
-        .slice(0, 5);
-      if (matches.length) showSuggestions(matches);
-      else suggestions.style.display = 'none';
+      
+      sugerencias.forEach(sugerencia => {
+        const div = document.createElement('div');
+        div.className = 'autocomplete-suggestion';
+        div.textContent = sugerencia;
+        
+        // Al hacer click en una sugerencia
+        div.addEventListener('click', function() {
+          input.value = sugerencia;
+          suggestionsDiv.style.display = 'none';
+          suggestionsDiv.innerHTML = '';
+        });
+        
+        suggestionsDiv.appendChild(div);
+      });
+      
+      suggestionsDiv.style.display = 'block';
+    }
+    
+    // Buscar sugerencias mientras escribe
+    input.addEventListener('input', function() {
+      const query = this.value.trim();
+      
+      // Limpiar timeout anterior
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
+      // Si hay menos de 2 caracteres, no buscar
+      if (query.length < 2) {
+        suggestionsDiv.style.display = 'none';
+        return;
+      }
+      
+      // Esperar 300ms antes de buscar (para no saturar con requests)
+      timeoutId = setTimeout(async () => {
+        try {
+          const response = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
+          if (response.ok) {
+            const sugerencias = await response.json();
+            mostrarSugerencias(sugerencias);
+          }
+        } catch (error) {
+          console.error('Error buscando sugerencias:', error);
+        }
+      }, 300);
     });
-
-    document.addEventListener('click', function (e) {
-      if (!input.contains(e.target) && !suggestions.contains(e.target)) {
-        suggestions.style.display = 'none';
+    
+    // Ocultar sugerencias al hacer click fuera
+    document.addEventListener('click', function(e) {
+      if (!input.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+        suggestionsDiv.style.display = 'none';
+      }
+    });
+    
+    // Navegación con teclado
+    input.addEventListener('keydown', function(e) {
+      const suggestions = suggestionsDiv.querySelectorAll('.autocomplete-suggestion');
+      let current = -1;
+      
+      // Encontrar elemento actualmente seleccionado
+      suggestions.forEach((el, index) => {
+        if (el.classList.contains('selected')) {
+          current = index;
+        }
+      });
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        current = (current + 1) % suggestions.length;
+        suggestions.forEach(el => el.classList.remove('selected'));
+        if (suggestions[current]) {
+          suggestions[current].classList.add('selected');
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        current = current <= 0 ? suggestions.length - 1 : current - 1;
+        suggestions.forEach(el => el.classList.remove('selected'));
+        if (suggestions[current]) {
+          suggestions[current].classList.add('selected');
+        }
+      } else if (e.key === 'Enter' && current >= 0) {
+        e.preventDefault();
+        if (suggestions[current]) {
+          input.value = suggestions[current].textContent;
+          suggestionsDiv.style.display = 'none';
+        }
+      } else if (e.key === 'Escape') {
+        suggestionsDiv.style.display = 'none';
       }
     });
   }
+  
+  // Configurar autocompletado para profesional y comitente
+  setupAutocomplete('nombre_profesional', 'profesional_suggestions', '/api/sugerencias-profesionales');
+  setupAutocomplete('nombre_comitente', 'comitente_suggestions', '/api/sugerencias-comitentes');
+  
+  // ========= FIN DE FUNCIONALIDAD DE AUTOCOMPLETADO =========
 
-  setupAutocomplete('nombre_profesional', 'profesional_suggestions', profesionalCache);
-  setupAutocomplete('nombre_comitente', 'comitente_suggestions', comitenteCache);
+  // --- Profesionales adicionales (código existente) ---
+  const addBtn = document.getElementById('add-professional');
+  const container = document.getElementById('additional-professionals-container');
 
-  // --- Formateo automático de montos en ARS (corregido) ---
-  const montoInputs = document.querySelectorAll('input[name$="_monto"]');
-  montoInputs.forEach(input => {
+  if (addBtn && container) {
+    let profCount = container.querySelectorAll('.additional-professional').length;
+
+    addBtn.addEventListener('click', function () {
+      profCount++;
+      const newProfHtml = `
+        <div class="additional-professional mb-3 position-relative">
+          <button type="button" class="btn btn-sm btn-danger remove-professional">Quitar</button>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
+                     placeholder="Nombre completo del profesional adicional...">
+            </div>
+            <div class="col-md-4">
+              <input type="text" name="profesionales_adicionales_whatsapp[]" class="form-control" 
+                     placeholder="WhatsApp del profesional adicional...">
+            </div>
+            <div class="col-md-4">
+              <select name="profesionales_adicionales_profesion[]" class="form-select">
+                <option value="">Seleccionar profesión</option>
+                {% for prof in profesiones %}
+                  <option value="{{ prof }}">{{ prof }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', newProfHtml);
+      attachRemoveHandlers();
+    });
+
+    function attachRemoveHandlers() {
+      document.querySelectorAll('.remove-professional').forEach(btn => {
+        btn.addEventListener('click', function () {
+          this.closest('.additional-professional').remove();
+        });
+      });
+    }
+    attachRemoveHandlers();
+  }
+
+  // --- Formateo de montos con $ (código existente) ---
+  document.querySelectorAll('.money-input').forEach(function (input) {
     input.addEventListener('input', function () {
-      // Permitimos dígitos, puntos y comas; eliminamos cualquier otra cosa
       let value = this.value.replace(/[^\d.,]/g, '');
-      // Si no empieza con $, lo anteponemos (sin romper mientras el usuario escribe)
-      if (value && !this.value.trim().startsWith('$')) {
-        this.value = '$ ' + value;
-      } else {
-        this.value = (this.value.trim().startsWith('$') ? '$ ' : '') + value;
+      if (value && !value.startsWith('$')) {
+        this.value = (value === '$' ? '$ ' : '') + value;
       }
     });
 
@@ -809,16 +860,15 @@ document.addEventListener('DOMContentLoaded', function () {
         this.value = '';
         return;
       }
-      // Si no tiene decimales con coma, agregamos ,00 al final
       if (!/,\d{1,2}$/.test(value)) {
-        value = value.replace(/[.,]$/, ''); // evitar coma/punto final suelto
+        value = value.replace(/[.,]$/, '');
         value = value + ',00';
       }
       this.value = '$ ' + value;
     });
   });
 
-  // --- Validación visual del formulario ---
+  // --- Validación visual del formulario (código existente) ---
   const form = document.querySelector('form');
   if (form) {
     form.addEventListener('submit', function (e) {
@@ -874,7 +924,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // --- Animaciones (las agrega una sola vez) ---
+  // --- Animaciones ---
   const style = document.createElement('style');
   style.textContent = `
     @keyframes slideInRight {
@@ -884,6 +934,10 @@ document.addEventListener('DOMContentLoaded', function () {
     @keyframes slideOutRight {
       from { transform: translateX(0); opacity: 1; }
       to { transform: translateX(100%); opacity: 0; }
+    }
+    .autocomplete-suggestion.selected {
+      background: var(--primary-blue-80);
+      color: var(--primary-blue-20);
     }
   `;
   document.head.appendChild(style);
