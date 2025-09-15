@@ -489,7 +489,7 @@
               {% endif %}
             </div>
             
-            <button type="button" class="btn btn-sm btn-outline-success" onclick="agregarProfesional()">
+            <button type="button" class="btn btn-sm btn-outline-success" id="add-professional">
               ➕ Agregar Profesional
             </button>
           </div>
@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // --- Profesionales adicionales (código existente) ---
   const addBtn = document.getElementById('add-professional');
-  const container = document.getElementById('additional-professionals-container');
+  const container = document.getElementById('profesionales-adicionales');
 
   if (addBtn && container) {
     let profCount = container.querySelectorAll('.additional-professional').length;
@@ -812,15 +812,11 @@ document.addEventListener('DOMContentLoaded', function () {
         <div class="additional-professional mb-3 position-relative">
           <button type="button" class="btn btn-sm btn-danger remove-professional">Quitar</button>
           <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-6">
               <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
                      placeholder="Nombre completo del profesional adicional...">
             </div>
-            <div class="col-md-4">
-              <input type="text" name="profesionales_adicionales_whatsapp[]" class="form-control" 
-                     placeholder="WhatsApp del profesional adicional...">
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
               <select name="profesionales_adicionales_profesion[]" class="form-select">
                 <option value="">Seleccionar profesión</option>
                 {% for prof in profesiones %}
@@ -922,6 +918,38 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 3000);
       }
     });
+  }
+
+  // Función para agregar profesional adicional
+  function agregarProfesional() {
+    const container = document.getElementById('profesionales-adicionales');
+    
+    const newProfHtml = `
+      <div class="additional-professional">
+        <button type="button" class="remove-professional" onclick="eliminarProfesional(this)">✕</button>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <input type="text" name="profesionales_adicionales_nombre[]" class="form-control" 
+                  placeholder="Nombre del profesional" autocomplete="off">
+          </div>
+          <div class="col-md-6">
+            <select name="profesionales_adicionales_profesion[]" class="form-select">
+              <option value="">Seleccionar profesión</option>
+              {% for p in profesiones %}
+                <option value="{{ p }}">{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', newProfHtml);
+  }
+
+  // Función para eliminar profesional
+  function eliminarProfesional(button) {
+    button.closest('.additional-professional').remove();
   }
 
   // --- Animaciones ---
