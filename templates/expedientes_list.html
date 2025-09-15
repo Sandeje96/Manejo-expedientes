@@ -24,7 +24,7 @@
 }
 
 /* ======== Header y acciones ======== */
-.page-header{ display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+.page-header{ display:flex; align-items:center; gap:1rem; margin-bottom:1rem; margin-top: 1rem; }
 .page-title{
   margin:0; font-weight:800; color:var(--primary-blue-20); letter-spacing:.2px;
   display:flex; align-items:center; gap:.5rem;
@@ -59,15 +59,6 @@
 }
 .toolbar .form-control:focus, .toolbar .form-select:focus{
   border-color:var(--primary-blue-50); box-shadow:0 0 0 .2rem rgba(69,123,255,.15);
-}
-
-.page-header {
-    display: flex
-;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-    margin-top: 1rem;
 }
 
 /* Toggle densidad y columnas */
@@ -105,15 +96,15 @@
   box-shadow:0 18px 42px rgba(69,123,255,.1); overflow:hidden;
 }
 
-/* Scroll SIEMPRE visible */
-.table-scroll{
+/* Scroll SIEMPRE visible en contenedor principal */
+.table-scroll-container{
   overflow-x: scroll; /* siempre disponible */
   overflow-y: hidden;
-  min-height: 24px; /* asegura que la barra tenga espacio */
+  min-height: 24px;
 }
-.table-scroll::-webkit-scrollbar{ height:10px; }
-.table-scroll::-webkit-scrollbar-track{ background:#edf1ff; border-radius:10px; }
-.table-scroll::-webkit-scrollbar-thumb{
+.table-scroll-container::-webkit-scrollbar{ height:10px; }
+.table-scroll-container::-webkit-scrollbar-track{ background:#edf1ff; border-radius:10px; }
+.table-scroll-container::-webkit-scrollbar-thumb{
   background: linear-gradient(135deg,var(--primary-blue-70),var(--primary-blue-55)); border-radius:10px;
 }
 
@@ -176,10 +167,60 @@
   background-color: var(--primary-blue-50); border-color: var(--primary-blue-50);
 }
 
-/* Acciones por fila: XS */
-.row-actions .btn{
-  border-radius:8px; padding:.25rem .4rem; font-weight:700; font-size:.78rem; line-height:1.1;
+/* ===== Scroll horizontal fijo ===== */
+.table-wrapper { position: relative; margin-bottom: 60px; }
+
+/* Barra fija (siempre visible) */
+.fixed-scroll-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  border-top: 2px solid var(--primary-blue-70);
+  overflow-x: auto;
+  overflow-y: hidden;
+  z-index: 1000;
+  display: none; /* visible sólo cuando hay overflow */
+  box-shadow: 0 -4px 12px rgba(69, 123, 255, 0.15);
 }
+.fixed-scroll-content { height: 1px; }
+
+/* Estilos barra de scroll */
+.fixed-scroll-container::-webkit-scrollbar,
+.table-scroll-container::-webkit-scrollbar { height: 14px; background: var(--primary-blue-90); border-radius: 10px; }
+.fixed-scroll-container::-webkit-scrollbar-thumb,
+.table-scroll-container::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--primary-blue-50), var(--primary-blue-40)); border-radius: 10px; border: 2px solid var(--primary-blue-90); }
+.fixed-scroll-container::-webkit-scrollbar-thumb:hover,
+.table-scroll-container::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--primary-blue-40), var(--primary-blue-30)); }
+
+/* Indicador visual */
+.scroll-indicator {
+  position: fixed;
+  bottom: 25px;
+  right: 20px;
+  background: linear-gradient(135deg, var(--primary-blue-50), var(--primary-blue-40));
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: none;
+  z-index: 1001;
+  animation: pulse 2s infinite;
+  box-shadow: 0 4px 12px rgba(69, 123, 255, 0.3);
+}
+@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.05); opacity: 1; } }
+
+/* Ajuste para móviles */
+@media (max-width: 768px) {
+  .fixed-scroll-container { height: 25px; }
+  .scroll-indicator { bottom: 30px; right: 10px; font-size: 0.75rem; padding: 6px 12px; }
+}
+
+/* Acciones por fila: XS */
+.row-actions .btn{ border-radius:8px; padding:.25rem .4rem; font-weight:700; font-size:.78rem; line-height:1.1; }
 .row-actions .btn-strong{ box-shadow:none; }
 .row-actions .btn + .btn{ margin-left:.25rem; }
 
@@ -187,22 +228,11 @@
 tr.finalizado{ opacity: 0.3; }
 
 /* Paginación */
-.pagination .page-link{
-  border-radius:10px; border:1px solid var(--card-br);
-  color:var(--primary-blue-20); font-weight:700;
-}
-.pagination .page-item.active .page-link,
-.pagination .page-link:hover{
-  background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40)); color:#fff; border-color:transparent;
-}
+.pagination .page-link{ border-radius:10px; border:1px solid var(--card-br); color:var(--primary-blue-20); font-weight:700; }
+.pagination .page-item.active .page-link, .pagination .page-link:hover{ background:linear-gradient(135deg,var(--primary-blue-55),var(--primary-blue-40)); color:#fff; border-color:transparent; }
 
 /* Snackbar */
-.snackbar{
-  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-  background: #0f172a; color:#fff; padding:.5rem .8rem; border-radius:10px;
-  box-shadow:0 14px 34px rgba(0,0,0,.28); z-index: 9999; font-weight:700; opacity:0; pointer-events:none;
-  transition: opacity .25s ease, transform .25s ease; font-size:.85rem;
-}
+.snackbar{ position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background: #0f172a; color:#fff; padding:.5rem .8rem; border-radius:10px; box-shadow:0 14px 34px rgba(0,0,0,.28); z-index: 1200; font-weight:700; opacity:0; pointer-events:none; transition: opacity .25s ease, transform .25s ease; font-size:.85rem; }
 .snackbar.show{ opacity:1; transform:translateX(-50%) translateY(-4px); }
 </style>
 
@@ -223,12 +253,7 @@ tr.finalizado{ opacity: 0.3; }
 <div class="toolbar">
   <form class="row g-2 align-items-center" method="get">
     <div class="col-sm-6 col-md-5 col-lg-4">
-      <input
-        class="form-control"
-        type="search"
-        name="q"
-        placeholder="Buscar (N° CPIM, N° GOP, profesional, comitente)"
-        value="{{ q or '' }}">
+      <input class="form-control" type="search" name="q" placeholder="Buscar (N° CPIM, N° GOP, profesional, comitente)" value="{{ q or '' }}">
     </div>
 
     <div class="col-sm-4 col-md-3 col-lg-2">
@@ -258,17 +283,15 @@ tr.finalizado{ opacity: 0.3; }
 
       <div class="colmenu" id="colMenu">
         <button type="button" class="colmenu-btn">Columnas ▾</button>
-        <div class="colmenu-list" id="colMenuList">
-          <!-- opciones via JS -->
-        </div>
+        <div class="colmenu-list" id="colMenuList"></div>
       </div>
     </div>
   </form>
 </div>
 
-<div class="table-card">
-  <!-- Scroll SIEMPRE visible -->
-  <div class="table-scroll">
+<div class="table-card table-wrapper">
+  <!-- Contenedor con scroll principal SIEMPRE visible -->
+  <div class="table-scroll-container" id="tableScrollContainer">
     <table class="table align-middle" id="expTable">
       <thead>
         <tr>
@@ -514,11 +537,9 @@ tr.finalizado{ opacity: 0.3; }
               <a class="btn btn-outline btn-sm" href="{{ url_for('detalle_expediente', item_id=it.id) }}">Ver</a>
               <a class="btn btn-strong btn-sm" href="{{ url_for('editar_expediente', item_id=it.id) }}">Editar</a>
               <form action="{{ url_for('finalizar_expediente', item_id=it.id) }}" method="post" class="d-inline">
-                <button class="btn btn-strong btn-sm" type="submit"
-                  onclick="return confirm('¿Marcar como finalizado?')" title="Finalizar expediente">✓</button>
+                <button class="btn btn-strong btn-sm" type="submit" onclick="return confirm('¿Marcar como finalizado?')" title="Finalizar expediente">✓</button>
               </form>
-              <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline"
-                onsubmit="return confirm('¿Eliminar expediente?');">
+              <form action="{{ url_for('eliminar_expediente', item_id=it.id) }}" method="post" class="d-inline" onsubmit="return confirm('¿Eliminar expediente?');">
                 <button class="btn btn-outline btn-sm" type="submit" style="border-color:#ef4444; color:#ef4444;">🗑</button>
               </form>
             {% endif %}
@@ -532,18 +553,22 @@ tr.finalizado{ opacity: 0.3; }
   </div>
 </div>
 
+<!-- Barra de scroll fija SIEMPRE visible cuando hay overflow -->
+<div id="fixedScroll" class="fixed-scroll-container">
+  <div id="fixedScrollContent" class="fixed-scroll-content"></div>
+</div>
+<div id="scrollIndicator" class="scroll-indicator">Deslizar ↔</div>
+
 <div id="snackbar" class="snackbar">Actualizado</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  /* ====== Toggle densidad (arranca normal; activás para ultra compacto) ====== */
+  /* ====== Toggle densidad ====== */
   const table = document.getElementById('expTable');
   const densityToggle = document.getElementById('densityToggle');
   const DENSITY_KEY = 'cpim_table_density';
-
   const savedDensity = localStorage.getItem(DENSITY_KEY);
   if(savedDensity === 'dense'){ table.classList.add('dense'); densityToggle.checked = true; }
-
   densityToggle?.addEventListener('change', () => {
     table.classList.toggle('dense', densityToggle.checked);
     localStorage.setItem(DENSITY_KEY, densityToggle.checked ? 'dense' : 'normal');
@@ -551,13 +576,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ====== Column selector (dinámico + persistente) ====== */
   const COLS_KEY = 'cpim_table_cols';
-  const defaultCols = [
-    'cpim','fecha','otecnica','formato','profesionales','comitente','partida',
-    'fechapago','gop','bcpim','bimlauer','bonetto','bprof','sellado','visado','finalizado','acciones'
-  ];
+  const defaultCols = ['cpim','fecha','otecnica','formato','profesionales','comitente','partida','fechapago','gop','bcpim','bimlauer','bonetto','bprof','sellado','visado','finalizado','acciones'];
   const savedCols = JSON.parse(localStorage.getItem(COLS_KEY) || 'null');
   const activeCols = Array.isArray(savedCols) && savedCols.length ? savedCols : defaultCols.slice();
-
   const colMenu = document.getElementById('colMenu');
   const colMenuList = document.getElementById('colMenuList');
 
@@ -568,104 +589,143 @@ document.addEventListener('DOMContentLoaded', function() {
       const label = document.createElement('label');
       const chk = document.createElement('input');
       chk.type = 'checkbox';
-      chk.id = id;
-      chk.checked = activeCols.includes(col);
-      chk.dataset.col = col;
-      const span = document.createElement('span');
-      span.textContent = nombreColumnaHumana(col);
-      label.appendChild(chk);
-      label.appendChild(span);
-      colMenuList.appendChild(label);
-
-      chk.addEventListener('change', ()=>{
-        toggleColumn(col, chk.checked);
-        persistCols();
-      });
+      chk.id = id; chk.checked = activeCols.includes(col); chk.dataset.col = col;
+      const span = document.createElement('span'); span.textContent = nombreColumnaHumana(col);
+      label.appendChild(chk); label.appendChild(span); colMenuList.appendChild(label);
+      chk.addEventListener('change', ()=>{ toggleColumn(col, chk.checked); persistCols(); });
     });
   }
-
   function nombreColumnaHumana(key){
-    const map = {
-      cpim:'N° CPIM', fecha:'Fecha', otecnica:'Oficina Técnica', formato:'Formato',
-      profesionales:'Profesional(es)', comitente:'Comitente', partida:'Partida',
-      fechapago:'Fecha Pago', gop:'GOP', bcpim:'Bandeja CPIM', bimlauer:'Bandeja IMLAUER',
-      bonetto:'Bandeja ONETTO', bprof:'Bandeja PROFESIONAL', sellado:'Sellado',
-      visado:'Visado', finalizado:'Finalizado', acciones:'Acciones'
-    };
+    const map = { cpim:'N° CPIM', fecha:'Fecha', otecnica:'Oficina Técnica', formato:'Formato', profesionales:'Profesional(es)', comitente:'Comitente', partida:'Partida', fechapago:'Fecha Pago', gop:'GOP', bcpim:'Bandeja CPIM', bimlauer:'Bandeja IMLAUER', bonetto:'Bandeja ONETTO', bprof:'Bandeja PROFESIONAL', sellado:'Sellado', visado:'Visado', finalizado:'Finalizado', acciones:'Acciones' };
     return map[key] || key;
   }
-
-  function applyColumnVisibility(){
-    defaultCols.forEach(col=> setColVisible(col, activeCols.includes(col)) );
-  }
-
+  function applyColumnVisibility(){ defaultCols.forEach(col=> setColVisible(col, activeCols.includes(col)) ); }
   function setColVisible(col, show){
     document.querySelectorAll('th[data-col="'+col+'"]').forEach(n=> n.style.display = show ? '' : 'none');
     document.querySelectorAll('td[data-col="'+col+'"]').forEach(n=> n.style.display = show ? '' : 'none');
   }
-
   function toggleColumn(col, enabled){
     const idx = activeCols.indexOf(col);
     if(enabled && idx === -1) activeCols.push(col);
     if(!enabled && idx !== -1) activeCols.splice(idx,1);
     setColVisible(col, enabled);
   }
-
   function persistCols(){ localStorage.setItem(COLS_KEY, JSON.stringify(activeCols)); }
-
-  buildColMenu();
-  applyColumnVisibility();
-
-  colMenu?.querySelector('.colmenu-btn')?.addEventListener('click', ()=>{
-    colMenu.classList.toggle('open');
-  });
-  document.addEventListener('click', (e)=>{
-    if(!colMenu.contains(e.target)) colMenu.classList.remove('open');
-  });
+  buildColMenu(); applyColumnVisibility();
+  colMenu?.querySelector('.colmenu-btn')?.addEventListener('click', ()=>{ colMenu.classList.toggle('open'); });
+  document.addEventListener('click', (e)=>{ if(!colMenu.contains(e.target)) colMenu.classList.remove('open'); });
 
   /* ====== Oficina Técnica AJAX + snackbar ====== */
   const snack = document.getElementById('snackbar');
-  function showSnack(text, ok=true){
-    if(!snack) return;
-    snack.textContent = text || 'Actualizado';
-    snack.style.background = ok ? '#0f172a' : '#8b1d1d';
-    snack.classList.add('show');
-    setTimeout(()=> snack.classList.remove('show'), 1600);
-  }
-
-  const checkboxes = document.querySelectorAll('.oficina-tecnica-checkbox');
-  checkboxes.forEach(checkbox => {
+  function showSnack(text, ok=true){ if(!snack) return; snack.textContent = text || 'Actualizado'; snack.style.background = ok ? '#0f172a' : '#8b1d1d'; snack.classList.add('show'); setTimeout(()=> snack.classList.remove('show'), 1600); }
+  document.querySelectorAll('.oficina-tecnica-checkbox').forEach(checkbox => {
     checkbox.addEventListener('change', function() {
-      const expedienteId = this.dataset.expedienteId;
-      const isChecked = this.checked;
-      this.disabled = true;
-
-      fetch(`/expedientes/${expedienteId}/oficina-tecnica`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ en_oficina_tecnica: isChecked })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          showSnack('Oficina Técnica actualizada', true);
-        } else {
-          this.checked = !isChecked;
-          showSnack('Error al actualizar', false);
-          alert('Error al actualizar el estado: ' + (data.error || 'Error desconocido'));
-        }
-      })
-      .catch(err => {
-        console.error('Error:', err);
-        this.checked = !isChecked;
-        showSnack('Error de conexión', false);
-        alert('Error de conexión al actualizar el estado');
-      })
+      const expedienteId = this.dataset.expedienteId; const isChecked = this.checked; this.disabled = true;
+      fetch(`/expedientes/${expedienteId}/oficina-tecnica`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ en_oficina_tecnica: isChecked }) })
+      .then(r => r.json()).then(data => { if (data.success) { showSnack('Oficina Técnica actualizada', true); } else { this.checked = !isChecked; showSnack('Error al actualizar', false); alert('Error al actualizar el estado: ' + (data.error || 'Error desconocido')); } })
+      .catch(err => { console.error('Error:', err); this.checked = !isChecked; showSnack('Error de conexión', false); alert('Error de conexión al actualizar el estado'); })
       .finally(() => this.disabled = false);
     });
   });
+
+  /* ===== SCROLL HORIZONTAL FIJO (siempre visible y 1:1) ===== */
+  const tableContainer = document.getElementById('tableScrollContainer');
+  const fixedScroll = document.getElementById('fixedScroll');
+  const fixedScrollContent = document.getElementById('fixedScrollContent');
+  const scrollIndicator = document.getElementById('scrollIndicator');
+  let isUpdating = false;
+
+  // Calcula un ancho de track que hace que el maxScrollLeft del track sea IGUAL al de la tabla
+  function fixTrackWidth() {
+    if (!tableContainer || !fixedScroll || !fixedScrollContent) return;
+    const tableEl = document.getElementById('expTable');
+
+    // Máximo desplazable real del contenedor: scrollWidth - clientWidth
+    const containerMax = tableContainer.scrollWidth - tableContainer.clientWidth;
+
+    // Para que el track tenga el mismo maxScrollLeft, su ancho debe ser (max desplazable + ancho visible del track)
+    const desiredTrackWidth = containerMax + fixedScroll.clientWidth;
+
+    // También consideramos el ancho real de la tabla por si el contenedor tiene paddings/bordes
+    const tableScrollWidth = tableEl ? tableEl.scrollWidth : tableContainer.scrollWidth;
+
+    const minNeeded = Math.max(desiredTrackWidth, tableScrollWidth);
+    const current = parseFloat(fixedScrollContent.style.width) || 0;
+    if (Math.abs(current - minNeeded) > 1) {
+      fixedScrollContent.style.width = minNeeded + 'px';
+    }
+  }
+
+  function checkScroll() {
+    if (!tableContainer || !fixedScroll || !fixedScrollContent) return;
+    const hasHorizontalScroll = tableContainer.scrollWidth > tableContainer.clientWidth;
+
+    if (hasHorizontalScroll) {
+      // Mostrar SIEMPRE la barra fija cuando hay overflow horizontal
+      fixedScroll.style.display = 'block';
+
+      // Asegurar que el ancho del track esté bien calculado
+      fixTrackWidth();
+
+      // Sincronizar posición actual
+      fixedScroll.scrollLeft = tableContainer.scrollLeft;
+
+      // Indicador una vez
+      if (scrollIndicator && !scrollIndicator.hasAttribute('data-shown')) {
+        scrollIndicator.style.display = 'block';
+        scrollIndicator.setAttribute('data-shown', 'true');
+        setTimeout(() => { scrollIndicator.style.display = 'none'; }, 2500);
+      }
+    } else {
+      fixedScroll.style.display = 'none';
+      if (scrollIndicator) scrollIndicator.style.display = 'none';
+    }
+  }
+
+  // Sincronizar tabla -> barra fija
+  tableContainer.addEventListener('scroll', function() {
+    if (!isUpdating) {
+      isUpdating = true;
+      fixedScroll.scrollLeft = tableContainer.scrollLeft;
+      isUpdating = false;
+    }
+  });
+
+  // Sincronizar barra fija -> tabla
+  fixedScroll.addEventListener('scroll', function() {
+    if (!isUpdating) {
+      isUpdating = true;
+      tableContainer.scrollLeft = fixedScroll.scrollLeft;
+      isUpdating = false;
+    }
+  });
+
+  // Recalcular en resize
+  window.addEventListener('resize', () => { checkScroll(); fixTrackWidth(); });
+
+  // Inicial
+  checkScroll();
+  fixTrackWidth();
+
+  // Re-verificar tras layout
+  setTimeout(checkScroll, 120);
+  setTimeout(fixTrackWidth, 140);
+
+  // Observar cambios en la tabla (agregados/eliminados de filas/columnas)
+  const observer = new MutationObserver(() => { checkScroll(); fixTrackWidth(); });
+  observer.observe(tableContainer, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+
+  // ===== Mejoras móviles =====
+  if (window.innerWidth <= 768) {
+    const style = document.createElement('style');
+    style.textContent = `
+      #tableScrollContainer, #fixedScroll { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+    `;
+    document.head.appendChild(style);
+  }
 });
 </script>
+
 
 {% if items.pages > 1 %}
 <nav aria-label="Paginación" class="mt-3">
