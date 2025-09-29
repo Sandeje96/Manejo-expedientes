@@ -422,8 +422,7 @@ def sync_gop_data():
 def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
     """
     Actualiza el historial de bandejas después de una sincronización GOP.
-    Detecta cambios y registra movimientos entre bandejas.
-    Versión segura que maneja el caso donde la tabla no existe.
+    VERSIÓN CORREGIDA: Cierra bandejas que ya no están activas.
     
     Args:
         expediente_id: ID del expediente
@@ -450,7 +449,47 @@ def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
         if not expediente_result:
             return
         
-        # Procesar cada bandeja que tiene datos nuevos
+        # Primero: Cerrar TODOS los registros activos que NO estén en datos_nuevos
+        # o que estén vacíos en datos_nuevos
+        bandejas_con_datos = set()
+        for bandeja_tipo, datos in datos_nuevos.items():
+            if datos and datos.get('nombre'):
+                bandejas_con_datos.add(bandeja_tipo)
+        
+        # Obtener todos los registros activos actuales
+        registros_activos = _db.session.execute(
+            _db.text("""
+                SELECT id, bandeja_tipo, fecha_inicio
+                FROM historial_bandejas
+                WHERE expediente_id = :expediente_id
+                AND fecha_fin IS NULL
+            """),
+            {"expediente_id": expediente_id}
+        ).fetchall()
+        
+        # Cerrar los que ya no están activos
+        for registro in registros_activos:
+            if registro[1] not in bandejas_con_datos:
+                # Esta bandeja ya no tiene datos, cerrarla
+                dias_en_bandeja = (date.today() - registro[2]).days
+                _db.session.execute(
+                    _db.text("""
+                        UPDATE historial_bandejas
+                        SET fecha_fin = :fecha_fin,
+                            dias_en_bandeja = :dias,
+                            updated_at = :now
+                        WHERE id = :registro_id
+                    """),
+                    {
+                        "fecha_fin": date.today(),
+                        "dias": max(0, dias_en_bandeja),
+                        "now": datetime.utcnow(),
+                        "registro_id": registro[0]
+                    }
+                )
+                _log_info(f"Historial: Cerrado registro de bandeja {registro[1]} para expediente {expediente_id}")
+        
+        # Segundo: Procesar cada bandeja que tiene datos nuevos
         for bandeja_tipo, datos in datos_nuevos.items():
             if not datos or not datos.get('nombre'):
                 continue
@@ -476,35 +515,27 @@ def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
             
             if registro_activo:
                 # Ya existe un registro activo para esta bandeja
-                # Verificar si cambió el nombre de la bandeja o usuario
+                # Solo actualizar si cambió el nombre o usuario
                 if (registro_activo[1] != nombre_bandeja or 
                     registro_activo[2] != usuario):
                     
-                    # Cerrar el registro anterior
-                    dias_en_bandeja = (fecha_bandeja - registro_activo[3]).days
+                    # Actualizar el registro existente con los nuevos datos
                     _db.session.execute(
                         _db.text("""
-                            UPDATE historial_bandejas 
-                            SET fecha_fin = :fecha_fin, 
-                                dias_en_bandeja = :dias,
+                            UPDATE historial_bandejas
+                            SET bandeja_nombre = :nombre,
+                                usuario_asignado = :usuario,
                                 updated_at = :now
                             WHERE id = :registro_id
                         """),
                         {
-                            "fecha_fin": fecha_bandeja,
-                            "dias": max(0, dias_en_bandeja),
+                            "nombre": nombre_bandeja[:200],
+                            "usuario": usuario[:200],
                             "now": datetime.utcnow(),
                             "registro_id": registro_activo[0]
                         }
                     )
-                    
-                    # Crear nuevo registro
-                    _crear_nuevo_registro_historial(
-                        expediente_id, bandeja_tipo, nombre_bandeja, 
-                        usuario, fecha_bandeja
-                    )
-                    
-                    _log_info(f"Historial: Expediente {expediente_id} cambió en bandeja {bandeja_tipo}")
+                    _log_info(f"Historial: Actualizado registro en bandeja {bandeja_tipo} para expediente {expediente_id}")
             else:
                 # No existe registro activo, crear uno nuevo
                 _crear_nuevo_registro_historial(
@@ -515,10 +546,9 @@ def _actualizar_historial_tras_sincronizacion(expediente_id, datos_nuevos):
                 _log_info(f"Historial: Expediente {expediente_id} entró a bandeja {bandeja_tipo}")
     
     except Exception as e:
-        # Si la tabla no existe o hay otro error, hacer rollback y continuar
+        # Si hay error, hacer rollback y continuar
         _db.session.rollback()
         _log_warning(f"No se pudo actualizar historial para expediente {expediente_id}: {e}")
-        # No propagar el error para que la sincronización continúe
 
 def _crear_nuevo_registro_historial(expediente_id, bandeja_tipo, nombre_bandeja, usuario, fecha_inicio):
     """
