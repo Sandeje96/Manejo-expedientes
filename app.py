@@ -1187,6 +1187,7 @@ def create_app():
         
     # === RUTAS PARA ANÁLISIS DE TASAS ===
     @app.get("/analisis-tasas")
+    @login_required
     def analisis_tasas():
         """Página principal del análisis de tasas."""
         # Importar aquí para evitar imports circulares
@@ -1199,6 +1200,7 @@ def create_app():
         return render_template("analisis_tasas.html", cierres_anteriores=cierres_anteriores)
     
     @app.post("/analisis-tasas/ejecutar")
+    @login_required
     def ejecutar_analisis_tasas():
         """Ejecuta el análisis de tasas según los parámetros recibidos."""
         from tasas_analyzer import TasasAnalyzer
@@ -1270,6 +1272,7 @@ def create_app():
             return redirect(url_for('analisis_tasas'))
     
     @app.post("/analisis-tasas/cerrar")
+    @login_required
     def cerrar_analisis_tasas():
         """Cierra oficialmente un análisis de tasas, marcando expedientes como procesados."""
         from tasas_analyzer import TasasAnalyzer
