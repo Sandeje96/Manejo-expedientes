@@ -1232,27 +1232,37 @@ def create_app():
             
             # Agregar datos del análisis a la sesión para usar en exportación
             from flask import session
+            from decimal import Decimal
+            
+            def convertir_a_serializable(obj):
+                """Convierte objetos date y Decimal a strings para serialización JSON."""
+                if isinstance(obj, (date, datetime)):
+                    return obj.isoformat()
+                elif isinstance(obj, Decimal):
+                    return float(obj)
+                elif isinstance(obj, dict):
+                    return {k: convertir_a_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [convertir_a_serializable(item) for item in obj]
+                return obj
+            
+            # Convertir todo el resultado a tipos serializables
+            resultado_serializable = convertir_a_serializable(resultado)
+            
+            # Agregar datos del análisis a la sesión
             session['ultimo_analisis'] = {
                 'fecha_desde': fecha_desde_str,
                 'fecha_hasta': fecha_hasta_str,
                 'incluir_no_pagados': incluir_no_pagados,
-                'resultado': {
-                    'fecha_desde': fecha_desde,  # Usar el objeto date, no el string
-                    'fecha_hasta': fecha_hasta,  # Usar el objeto date, no el string
-                    'expedientes_pagados': resultado['expedientes_pagados'],
-                    'expedientes_no_pagados': resultado['expedientes_no_pagados'],
-                    'totales_por_tipo': resultado['totales_por_tipo'],
-                    'honorarios': resultado['honorarios'],
-                    'resumen': resultado['resumen']
-                }
+                'resultado': resultado_serializable
             }
             
             return render_template("analisis_tasas.html", 
-                                 resultado=resultado, 
-                                 cierres_anteriores=cierres_anteriores,
-                                 fecha_desde=fecha_desde_str,
-                                 fecha_hasta=fecha_hasta_str,
-                                 incluir_no_pagados=incluir_no_pagados)
+                                resultado=resultado, 
+                                cierres_anteriores=cierres_anteriores,
+                                fecha_desde=fecha_desde_str,
+                                fecha_hasta=fecha_hasta_str,
+                                incluir_no_pagados=incluir_no_pagados)
         
         except Exception as e:
             current_app.logger.error(f"Error en análisis de tasas: {e}")
@@ -1268,9 +1278,14 @@ def create_app():
         try:
             # Obtener datos del análisis desde la sesión
             ultimo_analisis = session.get('ultimo_analisis')
+            
             if not ultimo_analisis:
-                flash('No hay análisis pendiente para cerrar', 'warning')
+                current_app.logger.warning("No se encontró 'ultimo_analisis' en la sesión")
+                current_app.logger.warning(f"Claves en sesión: {list(session.keys())}")
+                flash('No hay análisis pendiente para cerrar. Por favor, ejecuta primero un análisis.', 'warning')
                 return redirect(url_for('analisis_tasas'))
+            
+            current_app.logger.info(f"Análisis encontrado en sesión: {ultimo_analisis.keys()}")
             
             # Obtener parámetros del cierre
             nombre_cierre = request.form.get('nombre_cierre', '').strip()
@@ -1281,10 +1296,33 @@ def create_app():
                 return redirect(url_for('analisis_tasas'))
             
             # Verificar que hay expedientes pagados para cerrar
-            resultado = ultimo_analisis['resultado']
+            resultado = ultimo_analisis.get('resultado')
+            if not resultado:
+                flash('Los datos del análisis están incompletos', 'danger')
+                return redirect(url_for('analisis_tasas'))
+            
             if not resultado.get('expedientes_pagados'):
                 flash('No hay expedientes pagados en este período para cerrar', 'warning')
                 return redirect(url_for('analisis_tasas'))
+            
+            # Convertir las fechas de string ISO a objetos date
+            def parse_fecha_iso(fecha_str):
+                """Convierte string ISO a objeto date."""
+                if isinstance(fecha_str, str):
+                    try:
+                        return datetime.fromisoformat(fecha_str).date()
+                    except:
+                        try:
+                            return datetime.strptime(fecha_str, '%Y-%m-%d').date()
+                        except:
+                            return fecha_str
+                return fecha_str
+            
+            # Convertir las fechas en el resultado
+            if 'fecha_desde' in resultado:
+                resultado['fecha_desde'] = parse_fecha_iso(resultado['fecha_desde'])
+            if 'fecha_hasta' in resultado:
+                resultado['fecha_hasta'] = parse_fecha_iso(resultado['fecha_hasta'])
             
             # Ejecutar cierre
             analyzer = TasasAnalyzer(_db.session)
