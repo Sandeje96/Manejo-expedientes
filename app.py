@@ -147,7 +147,7 @@ def create_app():
             "balance",                 # sección Balance (cuando la tengas/ya la tengas)
             "lista_notas",             # módulo notas
             "nueva_nota", "crear_nota", "editar_nota", "actualizar_nota", "eliminar_nota",
-            "sugerencias_remitentes",
+            "sugerencias_remitentes", "subir_respuesta_nota", "quitar_respuesta_nota",
             "login", "logout",         # auth
             "perfil", "cambiar_password", "home"
         }
@@ -705,6 +705,38 @@ def create_app():
         archivo_url = _db.Column(_db.String(512), nullable=True)
         mime_type = _db.Column(_db.String(100), nullable=True)
         size_bytes = _db.Column(_db.Integer, nullable=True)
+
+        # Medio por el cual ingresó la nota (Email, Personalmente, Otro)
+        medio_ingreso = _db.Column(_db.String(50), nullable=True)
+
+        # Contestación: si la nota la requiere y, cuando se responde, el archivo ligado a esta nota
+        requiere_respuesta = _db.Column(_db.Boolean, nullable=False, default=False, server_default=_db.false())
+        respuesta_fecha = _db.Column(_db.Date, nullable=True)
+        respuesta_observaciones = _db.Column(_db.Text, nullable=True)
+        respuesta_archivo_nombre = _db.Column(_db.String(255), nullable=True)
+        respuesta_archivo_gcs_path = _db.Column(_db.String(512), nullable=True)
+        respuesta_archivo_url = _db.Column(_db.String(512), nullable=True)
+        respuesta_mime_type = _db.Column(_db.String(100), nullable=True)
+        respuesta_size_bytes = _db.Column(_db.Integer, nullable=True)
+
+        @property
+        def respondida(self):
+            return bool(self.respuesta_archivo_url or self.respuesta_fecha)
+
+        @property
+        def estado_respuesta(self):
+            """'no_requiere' | 'pendiente' | 'respondida'"""
+            if self.respondida:
+                return "respondida"
+            return "pendiente" if self.requiere_respuesta else "no_requiere"
+
+        @property
+        def respuesta_es_imagen(self):
+            if self.respuesta_mime_type and self.respuesta_mime_type.startswith('image/'):
+                return True
+            if self.respuesta_archivo_nombre:
+                return self.respuesta_archivo_nombre.lower().rsplit('.', 1)[-1] in {'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'}
+            return False
         
         # Metadatos
         created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
@@ -736,6 +768,7 @@ def create_app():
     PROFESIONES_PERMITIDAS = ["Ingeniero/a", "Licenciado/a", "Maestro Mayor de Obras", "Técnico/a"]
     TIPOS_TRABAJO_PERMITIDOS = ["REGISTRACION", "AMPLIACION", "OBRA NUEVA"]
     RECEPTORES_NOTAS = ["Santiago", "Miriam"]
+    MEDIOS_INGRESO_NOTAS = ["Email", "Personalmente", "Otro"]
 
     # === Rutas ===
     @app.get("/")
@@ -1260,6 +1293,23 @@ def create_app():
             query = query.filter(Nota.fecha <= hasta)
         if recibido_por:
             query = query.filter(Nota.recibido_por.ilike(f"%{recibido_por}%"))
+
+        medio = request.args.get("medio", "").strip()
+        if medio in MEDIOS_INGRESO_NOTAS:
+            query = query.filter(Nota.medio_ingreso == medio)
+        else:
+            medio = ""
+
+        respuesta = request.args.get("respuesta", "").strip()
+        respondida_cond = or_(Nota.respuesta_archivo_url.isnot(None), Nota.respuesta_fecha.isnot(None))
+        if respuesta == "pendiente":
+            query = query.filter(Nota.requiere_respuesta.is_(True), ~respondida_cond)
+        elif respuesta == "respondida":
+            query = query.filter(respondida_cond)
+        elif respuesta == "no_requiere":
+            query = query.filter(Nota.requiere_respuesta.is_(False), ~respondida_cond)
+        else:
+            respuesta = ""
             
         items = query.order_by(Nota.numero_nota.desc(), Nota.fecha.desc()).paginate(page=page, per_page=25)
         
@@ -1268,15 +1318,18 @@ def create_app():
         receptores_list = sorted([r[0] for r in receptores if r[0]])
         
         proximo_nro = _siguiente_numero_nota()
+
+        # Cantidad de notas que esperan contestación (para el aviso en el listado)
+        pendientes_respuesta = Nota.query.filter(Nota.requiere_respuesta.is_(True), ~respondida_cond).count()
         
-        return render_template("notas_list.html", items=items, q=q, desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""), recibido_por=recibido_por, receptores_list=receptores_list, proximo_nro=proximo_nro)
+        return render_template("notas_list.html", items=items, q=q, desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""), recibido_por=recibido_por, receptores_list=receptores_list, proximo_nro=proximo_nro, medio=medio, respuesta=respuesta, medios=MEDIOS_INGRESO_NOTAS, pendientes_respuesta=pendientes_respuesta)
 
     @app.get("/notas/nueva")
     @login_required
     def nueva_nota():
         proximo_nro = _siguiente_numero_nota()
         hoy = date.today().strftime("%Y-%m-%d")
-        return render_template("nota_form.html", item=None, proximo_nro=proximo_nro, hoy=hoy)
+        return render_template("nota_form.html", item=None, proximo_nro=proximo_nro, hoy=hoy, medios=MEDIOS_INGRESO_NOTAS)
 
     @app.post("/notas/nueva")
     @login_required
@@ -1299,6 +1352,11 @@ def create_app():
                 flash("Seleccioná quién recibió la nota (Santiago o Miriam).", "danger")
                 return redirect(url_for("nueva_nota"))
             
+            medio_ingreso = request.form.get("medio_ingreso", "").strip()
+            if medio_ingreso not in MEDIOS_INGRESO_NOTAS:
+                flash("Seleccioná por qué medio ingresó la nota.", "danger")
+                return redirect(url_for("nueva_nota"))
+
             if not referencia or not remitente:
                 flash("La Referencia y el Remitente son obligatorios.", "danger")
                 return redirect(url_for("nueva_nota"))
@@ -1308,7 +1366,9 @@ def create_app():
                 fecha=fecha,
                 referencia=referencia,
                 remitente=_capitalize_words(remitente),
-                recibido_por=_capitalize_words(recibido_por) if recibido_por else None
+                recibido_por=_capitalize_words(recibido_por) if recibido_por else None,
+                medio_ingreso=medio_ingreso,
+                requiere_respuesta=(request.form.get("requiere_respuesta") == "1"),
             )
             
             # Archivo adjunto
@@ -1337,7 +1397,7 @@ def create_app():
     @login_required
     def editar_nota(item_id: int):
         item = Nota.query.get_or_404(item_id)
-        return render_template("nota_form.html", item=item, proximo_nro=item.numero_nota, hoy=item.fecha.strftime("%Y-%m-%d") if item.fecha else "")
+        return render_template("nota_form.html", item=item, proximo_nro=item.numero_nota, hoy=item.fecha.strftime("%Y-%m-%d") if item.fecha else "", medios=MEDIOS_INGRESO_NOTAS)
 
     @app.post("/notas/<int:item_id>/editar")
     @login_required
@@ -1367,6 +1427,13 @@ def create_app():
             item.referencia = referencia
             item.remitente = _capitalize_words(remitente)
             item.recibido_por = _capitalize_words(recibido_por) if recibido_por else None
+
+            medio_ingreso = request.form.get("medio_ingreso", "").strip()
+            if medio_ingreso not in MEDIOS_INGRESO_NOTAS:
+                flash("Seleccioná por qué medio ingresó la nota.", "danger")
+                return redirect(url_for("editar_nota", item_id=item.id))
+            item.medio_ingreso = medio_ingreso
+            item.requiere_respuesta = request.form.get("requiere_respuesta") == "1"
             
             # Archivo adjunto nuevo (si se subió uno para reemplazar)
             archivo = request.files.get("archivo")
@@ -1410,6 +1477,60 @@ def create_app():
             _db.session.rollback()
             flash(f"Error al eliminar la nota: {e}", "danger")
         return redirect(url_for("lista_notas"))
+
+    @app.post("/notas/<int:item_id>/respuesta")
+    @login_required
+    def subir_respuesta_nota(item_id: int):
+        """Adjunta la contestación a la nota original y la marca como respondida."""
+        item = Nota.query.get_or_404(item_id)
+        try:
+            archivo = request.files.get("archivo_respuesta")
+            if not archivo or not archivo.filename:
+                flash("Seleccioná el archivo de la contestación (foto o PDF).", "danger")
+                return redirect(request.referrer or url_for("lista_notas"))
+
+            info = _upload_nota_file(archivo, dest_prefix="notas/respuestas")
+            if not info:
+                flash("No se pudo procesar el archivo de la contestación.", "danger")
+                return redirect(request.referrer or url_for("lista_notas"))
+
+            item.respuesta_archivo_nombre = info["filename"]
+            item.respuesta_archivo_gcs_path = info["gcs_path"]
+            item.respuesta_archivo_url = info["public_url"]
+            item.respuesta_mime_type = info["mime_type"]
+            item.respuesta_size_bytes = info.get("size_bytes")
+            item.respuesta_fecha = _parse_date(request.form.get("respuesta_fecha")) or date.today()
+            item.respuesta_observaciones = (request.form.get("respuesta_observaciones") or "").strip() or None
+            # Si se contesta una nota que no estaba marcada, queda registrada como que requirió respuesta
+            item.requiere_respuesta = True
+
+            _db.session.commit()
+            flash(f"Contestación de la Nota N° {item.numero_nota} registrada.", "success")
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error subiendo contestación de nota {item_id}: {e}")
+            flash(f"Error al subir la contestación: {e}", "danger")
+        return redirect(request.referrer or url_for("lista_notas"))
+
+    @app.post("/notas/<int:item_id>/respuesta/quitar")
+    @login_required
+    def quitar_respuesta_nota(item_id: int):
+        """Quita la contestación cargada (la nota vuelve a quedar pendiente)."""
+        item = Nota.query.get_or_404(item_id)
+        try:
+            item.respuesta_archivo_nombre = None
+            item.respuesta_archivo_gcs_path = None
+            item.respuesta_archivo_url = None
+            item.respuesta_mime_type = None
+            item.respuesta_size_bytes = None
+            item.respuesta_fecha = None
+            item.respuesta_observaciones = None
+            _db.session.commit()
+            flash(f"Contestación de la Nota N° {item.numero_nota} quitada.", "info")
+        except Exception as e:
+            _db.session.rollback()
+            flash(f"Error al quitar la contestación: {e}", "danger")
+        return redirect(request.referrer or url_for("lista_notas"))
 
     @app.get("/api/sugerencias-remitentes")
     @login_required
@@ -2766,6 +2887,34 @@ def create_app():
             _db.create_all()
         except Exception as e:
             app.logger.warning(f"Error asegurando tablas en base de datos: {e}")
+
+        # create_all() no agrega columnas a tablas ya existentes: sumamos las nuevas de "notas" si faltan.
+        try:
+            from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+            _insp = _sa_inspect(_db.engine)
+            if "notas" in _insp.get_table_names():
+                _existentes = {c["name"] for c in _insp.get_columns("notas")}
+                _nuevas = {
+                    "medio_ingreso": "VARCHAR(50)",
+                    "requiere_respuesta": "BOOLEAN NOT NULL DEFAULT FALSE",
+                    "respuesta_fecha": "DATE",
+                    "respuesta_observaciones": "TEXT",
+                    "respuesta_archivo_nombre": "VARCHAR(255)",
+                    "respuesta_archivo_gcs_path": "VARCHAR(512)",
+                    "respuesta_archivo_url": "VARCHAR(512)",
+                    "respuesta_mime_type": "VARCHAR(100)",
+                    "respuesta_size_bytes": "INTEGER",
+                }
+                for _col, _ddl in _nuevas.items():
+                    if _col not in _existentes:
+                        try:
+                            with _db.engine.begin() as _conn:
+                                _conn.execute(_sa_text(f"ALTER TABLE notas ADD COLUMN {_col} {_ddl}"))
+                            app.logger.info(f"Columna agregada a notas: {_col}")
+                        except Exception as _e:
+                            app.logger.warning(f"No se pudo agregar la columna notas.{_col}: {_e}")
+        except Exception as e:
+            app.logger.warning(f"Error migrando columnas de notas: {e}")
 
     return app
 

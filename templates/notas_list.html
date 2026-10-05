@@ -92,16 +92,54 @@
   background: #eef4ff;
   color: var(--primary-blue-30);
   border: 1px solid var(--primary-blue-80);
-  padding: .3rem .65rem;
+  padding: .25rem .6rem;
   border-radius: 8px;
   font-weight: 700;
-  font-size: .85rem;
+  font-size: .82rem;
   display: inline-block;
 }
 
+.badge-medio{
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: .25rem .6rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: .82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.badge-estado-resp{
+  font-size: .78rem;
+  font-weight: 800;
+  padding: .25rem .55rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+.badge-estado-resp.pendiente{
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.badge-estado-resp.respondida{
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+.badge-estado-resp.no-requiere{
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
 .thumb-preview{
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   object-fit: cover;
   border-radius: 8px;
   border: 2px solid var(--primary-blue-80);
@@ -121,7 +159,7 @@
   font-weight: 700;
   font-size: .8rem;
   border-radius: 8px;
-  padding: .3rem .6rem;
+  padding: .25rem .55rem;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -131,6 +169,26 @@
 .btn-file-preview:hover{
   background: var(--primary-blue-50);
   color: #fff;
+}
+
+.btn-subir-resp{
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  border: none;
+  font-size: .78rem;
+  font-weight: 800;
+  border-radius: 8px;
+  padding: .3rem .6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  box-shadow: 0 4px 10px rgba(37,99,235,.25);
+  transition: all .2s;
+}
+.btn-subir-resp:hover{
+  color: #fff;
+  transform: translateY(-1px);
+  filter: brightness(.95);
 }
 
 .empty-state{
@@ -157,9 +215,14 @@
 <div class="container py-2">
   <!-- Header -->
   <div class="page-header">
-    <h2 class="page-title">
-      📨 Registro de Notas / Mesa de Entradas
-    </h2>
+    <div>
+      <h2 class="page-title">
+        📨 Registro de Notas / Mesa de Entradas
+      </h2>
+      <div class="text-muted small mt-1">
+        Seguimiento de notas recibidas, medios de ingreso y contestaciones emitidas.
+      </div>
+    </div>
     <div class="d-flex align-items-center gap-2">
       <a href="{{ url_for('nueva_nota') }}" class="btn btn-strong">
         <span>➕</span> Cargar Nueva Nota
@@ -167,11 +230,27 @@
     </div>
   </div>
 
+  <!-- Aviso si hay contestaciones pendientes -->
+  {% if pendientes_respuesta > 0 and respuesta != 'pendiente' %}
+    <div class="alert alert-warning d-flex align-items-center justify-content-between p-3 mb-3 border-0 shadow-sm" style="border-radius: 14px; background: #fffbeb; border-left: 5px solid #f59e0b !important;">
+      <div class="d-flex align-items-center gap-2">
+        <span class="fs-4">⏳</span>
+        <div>
+          <strong class="text-warning-emphasis">Hay {{ pendientes_respuesta }} nota(s) que requieren contestación</strong>
+          <div class="small text-muted">Podés filtrar para visualizarlas y adjuntar la contestación correspondiente.</div>
+        </div>
+      </div>
+      <a href="{{ url_for('lista_notas', respuesta='pendiente') }}" class="btn btn-sm btn-warning fw-bold px-3 py-1" style="border-radius: 10px;">
+        Ver pendientes
+      </a>
+    </div>
+  {% endif %}
+
   <!-- Barra de Filtros y Búsqueda -->
   <div class="toolbar">
     <form method="GET" action="{{ url_for('lista_notas') }}" class="row g-2 align-items-end">
       <!-- Buscador -->
-      <div class="col-12 col-md-4">
+      <div class="col-12 col-md-3">
         <label class="form-label small fw-bold text-muted mb-1">Buscar</label>
         <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="N° Nota, Remitente, Referencia...">
       </div>
@@ -186,7 +265,7 @@
         <input type="date" name="hasta" value="{{ hasta }}" class="form-control">
       </div>
       <!-- Recibido por -->
-      <div class="col-12 col-md-2">
+      <div class="col-6 col-md-2">
         <label class="form-label small fw-bold text-muted mb-1">Recibido por</label>
         <select name="recibido_por" class="form-select">
           <option value="">(Todos)</option>
@@ -195,16 +274,36 @@
           {% endfor %}
         </select>
       </div>
+      <!-- Medio de Ingreso -->
+      <div class="col-6 col-md-1">
+        <label class="form-label small fw-bold text-muted mb-1">Medio</label>
+        <select name="medio" class="form-select">
+          <option value="">(Todos)</option>
+          {% for m in medios %}
+            <option value="{{ m }}" {% if medio == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Estado Contestación -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-bold text-muted mb-1">Contestación</label>
+        <select name="respuesta" class="form-select">
+          <option value="">(Todas)</option>
+          <option value="pendiente" {% if respuesta == 'pendiente' %}selected{% endif %}>⏳ Pendiente</option>
+          <option value="respondida" {% if respuesta == 'respondida' %}selected{% endif %}>✅ Respondida</option>
+          <option value="no_requiere" {% if respuesta == 'no_requiere' %}selected{% endif %}>⚪ No requiere</option>
+        </select>
+      </div>
       <!-- Botones -->
-      <div class="col-12 col-md-2 d-flex gap-2">
-        <button type="submit" class="btn btn-primary w-100 fw-bold" style="height:42px; border-radius:12px;">
-          🔍 Filtrar
-        </button>
-        {% if q or desde or hasta or recibido_por %}
-          <a href="{{ url_for('lista_notas') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" title="Limpiar filtros" style="height:42px; width:48px; border-radius:12px;">
-            ✕
+      <div class="col-12 col-md-12 d-flex justify-content-end gap-2 mt-2">
+        {% if q or desde or hasta or recibido_por or medio or respuesta %}
+          <a href="{{ url_for('lista_notas') }}" class="btn btn-outline-secondary d-inline-flex align-items-center gap-1 fw-bold" style="height:38px; border-radius:10px; font-size:.88rem;">
+            ✕ Limpiar filtros
           </a>
         {% endif %}
+        <button type="submit" class="btn btn-primary fw-bold px-4 d-inline-flex align-items-center gap-1" style="height:38px; border-radius:10px; font-size:.88rem;">
+          🔍 Aplicar Filtros
+        </button>
       </div>
     </form>
   </div>
@@ -215,13 +314,15 @@
       <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
-            <th style="width: 100px; text-align: center;">N° Nota</th>
-            <th style="width: 110px;">Fecha</th>
+            <th style="width: 80px; text-align: center;">N°</th>
+            <th style="width: 105px;">Fecha</th>
             <th>Referencia / Asunto</th>
-            <th style="width: 220px;">Remitente</th>
-            <th style="width: 140px;">Recibido por</th>
-            <th style="width: 120px; text-align: center;">Adjunto</th>
-            <th style="width: 110px; text-align: center;">Acciones</th>
+            <th style="width: 200px;">Remitente</th>
+            <th style="width: 120px;">Recibido por</th>
+            <th style="width: 130px;">Medio</th>
+            <th style="width: 110px; text-align: center;">Nota Orig.</th>
+            <th style="width: 190px;">Contestación</th>
+            <th style="width: 95px; text-align: center;">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -242,7 +343,7 @@
 
                 <!-- Referencia -->
                 <td>
-                  <div class="fw-medium text-dark" style="max-width: 480px; word-break: break-word;">
+                  <div class="fw-medium text-dark" style="max-width: 380px; word-break: break-word;">
                     {{ nota.referencia }}
                   </div>
                 </td>
@@ -263,7 +364,21 @@
                   {% endif %}
                 </td>
 
-                <!-- Foto / Adjunto -->
+                <!-- Medio de Ingreso -->
+                <td>
+                  {% if nota.medio_ingreso %}
+                    <span class="badge-medio">
+                      {% if nota.medio_ingreso == 'Email' %}📧 Email
+                      {% elif nota.medio_ingreso == 'Personalmente' %}🤝 En mano
+                      {% else %}📦 {{ nota.medio_ingreso }}
+                      {% endif %}
+                    </span>
+                  {% else %}
+                    <span class="text-muted small">-</span>
+                  {% endif %}
+                </td>
+
+                <!-- Foto / Adjunto Original -->
                 <td class="text-center">
                   {% if nota.archivo_url %}
                     {% if nota.es_imagen %}
@@ -271,9 +386,9 @@
                            alt="Nota {{ nota.numero_nota }}" 
                            class="thumb-preview shadow-sm"
                            onclick="mostrarLightbox('{{ nota.archivo_url }}', 'Nota N° {{ nota.numero_nota }} - {{ nota.remitente }}')"
-                           title="Clic para ampliar foto">
+                           title="Clic para ampliar foto original">
                     {% elif nota.es_pdf %}
-                      <a href="{{ nota.archivo_url }}" target="_blank" class="btn-file-preview" title="Abrir PDF">
+                      <a href="{{ nota.archivo_url }}" target="_blank" class="btn-file-preview" title="Abrir PDF original">
                         <span>📄</span> PDF
                       </a>
                     {% else %}
@@ -283,6 +398,45 @@
                     {% endif %}
                   {% else %}
                     <span class="text-muted small italic">Sin foto</span>
+                  {% endif %}
+                </td>
+
+                <!-- Contestación ligada -->
+                <td>
+                  {% if nota.respondida %}
+                    <div class="d-flex align-items-center gap-2">
+                      {% if nota.respuesta_archivo_url %}
+                        {% if nota.respuesta_es_imagen %}
+                          <img src="{{ nota.respuesta_archivo_url }}" 
+                               alt="Contestación Nota {{ nota.numero_nota }}" 
+                               class="thumb-preview shadow-sm"
+                               onclick="mostrarLightbox('{{ nota.respuesta_archivo_url }}', 'Contestación Nota N° {{ nota.numero_nota }}')"
+                               title="Clic para ampliar contestación">
+                        {% else %}
+                          <a href="{{ nota.respuesta_archivo_url }}" target="_blank" class="btn-file-preview" title="Abrir contestación PDF">
+                            <span>📄</span> PDF
+                          </a>
+                        {% endif %}
+                      {% endif %}
+                      <div>
+                        <span class="badge-estado-resp respondida">✅ Respondida</span>
+                        {% if nota.respuesta_fecha %}
+                          <div class="text-muted" style="font-size: .75rem;">{{ nota.respuesta_fecha.strftime('%d/%m/%Y') }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% elif nota.requiere_respuesta %}
+                    <div class="d-flex flex-column align-items-start gap-1">
+                      <span class="badge-estado-resp pendiente">⏳ Pendiente</span>
+                      <button type="button" 
+                              class="btn-subir-resp" 
+                              onclick="abrirRespuesta('{{ nota.id }}', '{{ nota.numero_nota }}')"
+                              title="Subir contestación de esta nota">
+                        📤 Subir respuesta
+                      </button>
+                    </div>
+                  {% else %}
+                    <span class="badge-estado-resp no-requiere">⚪ No requiere</span>
                   {% endif %}
                 </td>
 
@@ -309,12 +463,12 @@
             {% endfor %}
           {% else %}
             <tr>
-              <td colspan="7">
+              <td colspan="9">
                 <div class="empty-state">
                   <div class="empty-state-icon">📭</div>
                   <h5 class="fw-bold text-muted">No se encontraron notas registradas</h5>
                   <p class="text-muted small mb-3">
-                    {% if q or desde or hasta or recibido_por %}
+                    {% if q or desde or hasta or recibido_por or medio or respuesta %}
                       Probá ajustando o limpiando los filtros de búsqueda.
                     {% else %}
                       Comenzá cargando la primera nota que recibas.
@@ -341,14 +495,14 @@
           <ul class="pagination pagination-sm mb-0">
             {% if items.has_prev %}
               <li class="page-item">
-                <a class="page-link" href="{{ url_for('lista_notas', page=items.prev_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por) }}">« Anterior</a>
+                <a class="page-link" href="{{ url_for('lista_notas', page=items.prev_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por, medio=medio, respuesta=respuesta) }}">« Anterior</a>
               </li>
             {% endif %}
 
             {% for page_num in items.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
               {% if page_num %}
                 <li class="page-item {% if page_num == items.page %}active{% endif %}">
-                  <a class="page-link" href="{{ url_for('lista_notas', page=page_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por) }}">{{ page_num }}</a>
+                  <a class="page-link" href="{{ url_for('lista_notas', page=page_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por, medio=medio, respuesta=respuesta) }}">{{ page_num }}</a>
                 </li>
               {% else %}
                 <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -357,7 +511,7 @@
 
             {% if items.has_next %}
               <li class="page-item">
-                <a class="page-link" href="{{ url_for('lista_notas', page=items.next_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por) }}">Siguiente »</a>
+                <a class="page-link" href="{{ url_for('lista_notas', page=items.next_num, q=q, desde=desde, hasta=hasta, recibido_por=recibido_por, medio=medio, respuesta=respuesta) }}">Siguiente »</a>
               </li>
             {% endif %}
           </ul>
@@ -410,6 +564,41 @@
   </div>
 </div>
 
+<!-- Modal Subir Contestación -->
+<div class="modal fade" id="respuestaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 16px;">
+      <form id="formRespuestaNota" method="POST" action="" enctype="multipart/form-data">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold text-primary-emphasis">📤 Subir contestación</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body py-3">
+          <div class="small text-muted mb-3">
+            Se va a ligar a la <strong id="respuestaTextoNota">Nota</strong>.
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small" for="archivo_respuesta">Foto o PDF de la contestación <span class="text-danger">*</span></label>
+            <input type="file" class="form-control" id="archivo_respuesta" name="archivo_respuesta" accept="image/*,application/pdf" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold small" for="respuesta_fecha">Fecha de la contestación</label>
+            <input type="date" class="form-control" id="respuesta_fecha" name="respuesta_fecha">
+          </div>
+          <div>
+            <label class="form-label fw-bold small" for="respuesta_observaciones">Observaciones (opcional)</label>
+            <textarea class="form-control" id="respuesta_observaciones" name="respuesta_observaciones" rows="2" placeholder="Ej. Enviada por mail, entregada en mano..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary fw-bold">Guardar contestación</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 function mostrarLightbox(url, titulo) {
   document.getElementById('lightboxImg').src = url;
@@ -425,6 +614,16 @@ function confirmarEliminacion(id, numero) {
   document.getElementById('formEliminarNota').action = `/notas/${id}/eliminar`;
   
   const modal = new bootstrap.Modal(document.getElementById('eliminarModal'));
+  modal.show();
+}
+
+function abrirRespuesta(id, numero) {
+  document.getElementById('respuestaTextoNota').textContent = `Nota N° ${numero}`;
+  document.getElementById('formRespuestaNota').action = `/notas/${id}/respuesta`;
+  document.getElementById('formRespuestaNota').reset();
+  document.getElementById('respuesta_fecha').value = new Date().toISOString().slice(0, 10);
+
+  const modal = new bootstrap.Modal(document.getElementById('respuestaModal'));
   modal.show();
 }
 </script>

@@ -180,6 +180,45 @@
           </select>
         </div>
 
+        <!-- Medio de ingreso -->
+        <div class="col-12 col-md-6">
+          <label class="form-label" for="medio_ingreso">
+            Medio de ingreso <span class="text-danger">*</span>
+          </label>
+          <select id="medio_ingreso" name="medio_ingreso" class="form-select" required>
+            <option value="" {% if not item or not item.medio_ingreso %}selected{% endif %} disabled>Seleccionar...</option>
+            {% for m in medios %}
+              <option value="{{ m }}" {% if item and item.medio_ingreso == m %}selected{% endif %}>
+                {% if m == 'Email' %}📧 Email{% elif m == 'Personalmente' %}🤝 Personalmente{% else %}📦 {{ m }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <small class="text-muted d-block mt-1">Cómo llegó la nota al Consejo.</small>
+        </div>
+
+        <!-- Requiere contestación -->
+        <div class="col-12 col-md-6">
+          <label class="form-label d-block">Contestación</label>
+          <div class="form-check form-switch p-0 d-flex align-items-center gap-2" style="min-height: 46px;">
+            <input class="form-check-input ms-0" type="checkbox" role="switch" id="requiere_respuesta"
+                   name="requiere_respuesta" value="1" style="width: 2.6rem; height: 1.4rem;"
+                   {% if item and item.requiere_respuesta %}checked{% endif %}>
+            <label class="form-check-label fw-bold" for="requiere_respuesta">Esta nota requiere contestación</label>
+          </div>
+          {% if item and item.requiere_respuesta %}
+            {% if item.respondida %}
+              <small class="text-success fw-bold d-block mt-1">
+                ✅ Respondida{% if item.respuesta_fecha %} el {{ item.respuesta_fecha.strftime('%d/%m/%Y') }}{% endif %}.
+                {% if item.respuesta_archivo_url %}<a href="{{ item.respuesta_archivo_url }}" target="_blank">Ver contestación</a>{% endif %}
+              </small>
+            {% else %}
+              <small class="text-warning-emphasis fw-bold d-block mt-1">⏳ Pendiente de contestación. Se sube desde el listado de notas.</small>
+            {% endif %}
+          {% else %}
+            <small class="text-muted d-block mt-1">Si la tildás, podrás subir la contestación después y quedará ligada a esta nota.</small>
+          {% endif %}
+        </div>
+
         <!-- Remitente -->
         <div class="col-12">
           <label class="form-label" for="remitente">
