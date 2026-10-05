@@ -735,6 +735,7 @@ def create_app():
     ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
     PROFESIONES_PERMITIDAS = ["Ingeniero/a", "Licenciado/a", "Maestro Mayor de Obras", "Técnico/a"]
     TIPOS_TRABAJO_PERMITIDOS = ["REGISTRACION", "AMPLIACION", "OBRA NUEVA"]
+    RECEPTORES_NOTAS = ["Santiago", "Miriam"]
 
     # === Rutas ===
     @app.get("/")
@@ -1294,6 +1295,10 @@ def create_app():
             remitente = request.form.get("remitente", "").strip()
             recibido_por = request.form.get("recibido_por", "").strip()
             
+            if recibido_por not in RECEPTORES_NOTAS:
+                flash("Seleccioná quién recibió la nota (Santiago o Miriam).", "danger")
+                return redirect(url_for("nueva_nota"))
+            
             if not referencia or not remitente:
                 flash("La Referencia y el Remitente son obligatorios.", "danger")
                 return redirect(url_for("nueva_nota"))
@@ -1350,6 +1355,10 @@ def create_app():
             referencia = request.form.get("referencia", "").strip()
             remitente = request.form.get("remitente", "").strip()
             recibido_por = request.form.get("recibido_por", "").strip()
+            
+            if recibido_por not in RECEPTORES_NOTAS and recibido_por != (item.recibido_por or ""):
+                flash("Seleccioná quién recibió la nota (Santiago o Miriam).", "danger")
+                return redirect(url_for("editar_nota", item_id=item.id))
             
             if not referencia or not remitente:
                 flash("La Referencia y el Remitente son obligatorios.", "danger")

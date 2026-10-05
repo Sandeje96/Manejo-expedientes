@@ -166,20 +166,18 @@
         <!-- Recibido por -->
         <div class="col-12 col-md-4">
           <label class="form-label" for="recibido_por">
-            Recibido por
+            Recibido por <span class="text-danger">*</span>
           </label>
-          <input type="text" 
-                 id="recibido_por" 
-                 name="recibido_por" 
-                 class="form-control" 
-                 list="sugerenciasRecibido"
-                 placeholder="Ej. Santiago, Gustavo..." 
-                 value="{% if item %}{{ item.recibido_por or '' }}{% else %}{{ current_user.nombre_completo or current_user.username }}{% endif %}">
-          <datalist id="sugerenciasRecibido">
-            <option value="Santiago"></option>
-            <option value="Gustavo"></option>
-            <option value="Secretaría"></option>
-          </datalist>
+          {% set receptores_permitidos = ['Santiago', 'Miriam'] %}
+          <select id="recibido_por" name="recibido_por" class="form-select" required>
+            <option value="" {% if not item or not item.recibido_por %}selected{% endif %} disabled>Seleccionar...</option>
+            {% for r in receptores_permitidos %}
+              <option value="{{ r }}" {% if item and item.recibido_por == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+            {% if item and item.recibido_por and item.recibido_por not in receptores_permitidos %}
+              <option value="{{ item.recibido_por }}" selected>{{ item.recibido_por }} (anterior)</option>
+            {% endif %}
+          </select>
         </div>
 
         <!-- Remitente -->
