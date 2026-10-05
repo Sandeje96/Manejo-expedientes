@@ -303,6 +303,10 @@ NAVBAR (reemplazado)
             href="{{ url_for('nuevo_expediente') }}">➕ Nuevo</a>
         </li>
         <li class="nav-item">
+          <a class="nav-link {% if request.endpoint in ['lista_notas', 'nueva_nota', 'editar_nota'] %}active{% endif %}"
+            href="{{ url_for('lista_notas') }}">📨 Notas</a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='analisis_tasas' %}active{% endif %}"
             href="{{ url_for('analisis_tasas') }}">💰 Análisis Tasas</a>
         </li>
@@ -315,7 +319,11 @@ NAVBAR (reemplazado)
             href="{{ url_for('balance') }}">📊 Balance</a>
         </li>
       {% else %}
-        <!-- Usuario NO admin: solo Análisis y Balance -->
+        <!-- Usuario NO admin: solo Análisis, Balance y Notas -->
+        <li class="nav-item">
+          <a class="nav-link {% if request.endpoint in ['lista_notas', 'nueva_nota', 'editar_nota'] %}active{% endif %}"
+            href="{{ url_for('lista_notas') }}">📨 Notas</a>
+        </li>
         <li class="nav-item">
           <a class="nav-link {% if request.endpoint=='analisis_tasas' %}active{% endif %}"
             href="{{ url_for('analisis_tasas') }}">💰 Análisis Tasas</a>

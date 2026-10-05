@@ -145,6 +145,9 @@ def create_app():
             "exportar_analisis_tasas", # exportación del análisis
             "ver_cierre_tasas",        # ver cierres históricos
             "balance",                 # sección Balance (cuando la tengas/ya la tengas)
+            "lista_notas",             # módulo notas
+            "nueva_nota", "crear_nota", "editar_nota", "actualizar_nota", "eliminar_nota",
+            "sugerencias_remitentes",
             "login", "logout",         # auth
             "perfil", "cambiar_password", "home"
         }
@@ -685,6 +688,48 @@ def create_app():
         def load_user(user_id):
             return Usuario.query.get(int(user_id))
 
+    class Nota(_db.Model):
+        """Modelo para el registro de notas / mesa de entradas"""
+        __tablename__ = "notas"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        numero_nota = _db.Column(_db.Integer, nullable=False, index=True)
+        fecha = _db.Column(_db.Date, nullable=False, default=date.today)
+        referencia = _db.Column(_db.Text, nullable=False)
+        remitente = _db.Column(_db.String(255), nullable=False)
+        recibido_por = _db.Column(_db.String(150), nullable=True)
+        
+        # Archivo adjunto / Foto / Scan
+        archivo_nombre = _db.Column(_db.String(255), nullable=True)
+        archivo_gcs_path = _db.Column(_db.String(512), nullable=True)
+        archivo_url = _db.Column(_db.String(512), nullable=True)
+        mime_type = _db.Column(_db.String(100), nullable=True)
+        size_bytes = _db.Column(_db.Integer, nullable=True)
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        @property
+        def es_imagen(self):
+            if self.mime_type and self.mime_type.startswith('image/'):
+                return True
+            if self.archivo_nombre:
+                ext = self.archivo_nombre.lower().split('.')[-1]
+                return ext in {'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'}
+            return False
+            
+        @property
+        def es_pdf(self):
+            if self.mime_type == 'application/pdf':
+                return True
+            if self.archivo_nombre:
+                return self.archivo_nombre.lower().endswith('.pdf')
+            return False
+
+        def __repr__(self):
+            return f"<Nota {self.numero_nota} - {self.remitente}>"
+
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
     ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
@@ -1184,7 +1229,189 @@ def create_app():
             current_app.logger.error(f"Error generando documento adicional para expediente {item_id}: {e}")
             flash(f"Error generando documento adicional: {e}", "danger")
             return redirect(url_for('detalle_expediente', item_id=item_id))
+
+    # === RUTAS PARA REGISTRO DE NOTAS / MESA DE ENTRADAS ===
+    @app.get("/notas")
+    @login_required
+    def lista_notas():
+        q = request.args.get("q", "").strip()
+        desde = _parse_date(request.args.get("desde"))
+        hasta = _parse_date(request.args.get("hasta"))
+        recibido_por = request.args.get("recibido_por", "").strip()
+        page = int(request.args.get("page", 1))
         
+        query = Nota.query
+        
+        if q:
+            like = f"%{q}%"
+            filtros = [
+                Nota.referencia.ilike(like),
+                Nota.remitente.ilike(like),
+                Nota.recibido_por.ilike(like),
+            ]
+            if q.isdigit():
+                filtros.append(Nota.numero_nota == int(q))
+            query = query.filter(or_(*filtros))
+            
+        if desde:
+            query = query.filter(Nota.fecha >= desde)
+        if hasta:
+            query = query.filter(Nota.fecha <= hasta)
+        if recibido_por:
+            query = query.filter(Nota.recibido_por.ilike(f"%{recibido_por}%"))
+            
+        items = query.order_by(Nota.numero_nota.desc(), Nota.fecha.desc()).paginate(page=page, per_page=25)
+        
+        # Obtener lista de quienes recibieron para el filtro
+        receptores = _db.session.query(Nota.recibido_por).filter(Nota.recibido_por.isnot(None), Nota.recibido_por != '').distinct().all()
+        receptores_list = sorted([r[0] for r in receptores if r[0]])
+        
+        proximo_nro = _siguiente_numero_nota()
+        
+        return render_template("notas_list.html", items=items, q=q, desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""), recibido_por=recibido_por, receptores_list=receptores_list, proximo_nro=proximo_nro)
+
+    @app.get("/notas/nueva")
+    @login_required
+    def nueva_nota():
+        proximo_nro = _siguiente_numero_nota()
+        hoy = date.today().strftime("%Y-%m-%d")
+        return render_template("nota_form.html", item=None, proximo_nro=proximo_nro, hoy=hoy)
+
+    @app.post("/notas/nueva")
+    @login_required
+    def crear_nota():
+        try:
+            nro_str = request.form.get("numero_nota", "").strip()
+            if nro_str and nro_str.isdigit():
+                numero_nota = int(nro_str)
+            else:
+                numero_nota = _siguiente_numero_nota()
+                
+            fecha_str = request.form.get("fecha", "").strip()
+            fecha = _parse_date(fecha_str) or date.today()
+            
+            referencia = request.form.get("referencia", "").strip()
+            remitente = request.form.get("remitente", "").strip()
+            recibido_por = request.form.get("recibido_por", "").strip()
+            
+            if not referencia or not remitente:
+                flash("La Referencia y el Remitente son obligatorios.", "danger")
+                return redirect(url_for("nueva_nota"))
+                
+            nota = Nota(
+                numero_nota=numero_nota,
+                fecha=fecha,
+                referencia=referencia,
+                remitente=_capitalize_words(remitente),
+                recibido_por=_capitalize_words(recibido_por) if recibido_por else None
+            )
+            
+            # Archivo adjunto
+            archivo = request.files.get("archivo")
+            if archivo and archivo.filename:
+                info = _upload_nota_file(archivo, dest_prefix="notas")
+                if info:
+                    nota.archivo_nombre = info["filename"]
+                    nota.archivo_gcs_path = info["gcs_path"]
+                    nota.archivo_url = info["public_url"]
+                    nota.mime_type = info["mime_type"]
+                    nota.size_bytes = info.get("size_bytes")
+            
+            _db.session.add(nota)
+            _db.session.commit()
+            flash(f"Nota N° {nota.numero_nota} registrada con éxito.", "success")
+            return redirect(url_for("lista_notas"))
+            
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error creando nota: {e}")
+            flash(f"Error al guardar la nota: {e}", "danger")
+            return redirect(url_for("nueva_nota"))
+
+    @app.get("/notas/<int:item_id>/editar")
+    @login_required
+    def editar_nota(item_id: int):
+        item = Nota.query.get_or_404(item_id)
+        return render_template("nota_form.html", item=item, proximo_nro=item.numero_nota, hoy=item.fecha.strftime("%Y-%m-%d") if item.fecha else "")
+
+    @app.post("/notas/<int:item_id>/editar")
+    @login_required
+    def actualizar_nota(item_id: int):
+        item = Nota.query.get_or_404(item_id)
+        try:
+            nro_str = request.form.get("numero_nota", "").strip()
+            if nro_str and nro_str.isdigit():
+                item.numero_nota = int(nro_str)
+                
+            fecha_str = request.form.get("fecha", "").strip()
+            if fecha_str:
+                item.fecha = _parse_date(fecha_str) or item.fecha
+                
+            referencia = request.form.get("referencia", "").strip()
+            remitente = request.form.get("remitente", "").strip()
+            recibido_por = request.form.get("recibido_por", "").strip()
+            
+            if not referencia or not remitente:
+                flash("La Referencia y el Remitente son obligatorios.", "danger")
+                return redirect(url_for("editar_nota", item_id=item.id))
+                
+            item.referencia = referencia
+            item.remitente = _capitalize_words(remitente)
+            item.recibido_por = _capitalize_words(recibido_por) if recibido_por else None
+            
+            # Archivo adjunto nuevo (si se subió uno para reemplazar)
+            archivo = request.files.get("archivo")
+            if archivo and archivo.filename:
+                info = _upload_nota_file(archivo, dest_prefix="notas")
+                if info:
+                    item.archivo_nombre = info["filename"]
+                    item.archivo_gcs_path = info["gcs_path"]
+                    item.archivo_url = info["public_url"]
+                    item.mime_type = info["mime_type"]
+                    item.size_bytes = info.get("size_bytes")
+            
+            # Eliminar archivo si se tildó
+            if request.form.get("eliminar_archivo") == "1":
+                item.archivo_nombre = None
+                item.archivo_gcs_path = None
+                item.archivo_url = None
+                item.mime_type = None
+                item.size_bytes = None
+                
+            _db.session.commit()
+            flash(f"Nota N° {item.numero_nota} actualizada correctamente.", "success")
+            return redirect(url_for("lista_notas"))
+            
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error actualizando nota {item_id}: {e}")
+            flash(f"Error al actualizar la nota: {e}", "danger")
+            return redirect(url_for("editar_nota", item_id=item.id))
+
+    @app.post("/notas/<int:item_id>/eliminar")
+    @login_required
+    def eliminar_nota(item_id: int):
+        item = Nota.query.get_or_404(item_id)
+        try:
+            nro = item.numero_nota
+            _db.session.delete(item)
+            _db.session.commit()
+            flash(f"Nota N° {nro} eliminada.", "info")
+        except Exception as e:
+            _db.session.rollback()
+            flash(f"Error al eliminar la nota: {e}", "danger")
+        return redirect(url_for("lista_notas"))
+
+    @app.get("/api/sugerencias-remitentes")
+    @login_required
+    def sugerencias_remitentes():
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:
+            return jsonify([])
+        like = f"%{q}%"
+        remitentes = _db.session.query(Nota.remitente).filter(Nota.remitente.ilike(like)).filter(Nota.remitente.isnot(None)).distinct().limit(10).all()
+        return jsonify(sorted([r[0] for r in remitentes if r[0]]))
+
     # === RUTAS PARA ANÁLISIS DE TASAS ===
     @app.get("/analisis-tasas")
     @login_required
@@ -1979,6 +2206,82 @@ def create_app():
                 ))
                 count += 1
         return count
+
+    # === Helpers para Notas / Mesa de Entradas ===
+    def _siguiente_numero_nota():
+        try:
+            max_num = _db.session.query(_db.func.max(Nota.numero_nota)).scalar()
+            return (max_num or 0) + 1
+        except Exception:
+            return 1
+
+    def _upload_nota_file(file_storage, dest_prefix="notas"):
+        """
+        Sube un archivo de nota (foto o PDF) a Google Cloud Storage o guarda localmente si GCS no está disponible.
+        """
+        if not file_storage or not getattr(file_storage, "filename", ""):
+            return None
+
+        filename = secure_filename(file_storage.filename)
+        if not filename:
+            return None
+
+        ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+        allowed_exts = {"jpg", "jpeg", "png", "webp", "pdf", "bmp", "gif"}
+        if ext not in allowed_exts:
+            raise ValueError(f"Formato '.{ext}' no permitido. Por favor subí una foto (JPG, PNG, WEBP) o un PDF.")
+
+        # Determinar MIME
+        mime_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "webp": "image/webp",
+            "pdf": "application/pdf",
+            "gif": "image/gif",
+            "bmp": "image/bmp",
+        }
+        mime = mime_map.get(ext, "application/octet-stream")
+
+        bucket_name = os.getenv("GCS_BUCKET_NAME")
+        
+        # Intentar GCS primero si hay bucket configurado
+        if bucket_name:
+            try:
+                client = _get_gcs_client()
+                bucket = client.bucket(bucket_name)
+                unique_filename = f"{uuid.uuid4().hex}_{filename}"
+                key = f"{dest_prefix}/{unique_filename}"
+                blob = bucket.blob(key)
+                blob.upload_from_file(file_storage.stream, content_type=mime)
+
+                public_url = f"https://storage.googleapis.com/{bucket_name}/{key}"
+                return {
+                    "filename": filename,
+                    "gcs_path": f"gs://{bucket_name}/{key}",
+                    "public_url": public_url,
+                    "mime_type": mime,
+                    "size_bytes": getattr(file_storage, "content_length", None),
+                }
+            except Exception as e:
+                current_app.logger.warning(f"No se pudo subir a GCS, guardando localmente: {e}")
+                file_storage.stream.seek(0)
+        
+        # Fallback local
+        upload_dir = os.path.join(current_app.static_folder, "uploads", "notas")
+        os.makedirs(upload_dir, exist_ok=True)
+        unique_filename = f"{uuid.uuid4().hex}_{filename}"
+        local_path = os.path.join(upload_dir, unique_filename)
+        file_storage.save(local_path)
+        
+        public_url = url_for("static", filename=f"uploads/notas/{unique_filename}")
+        return {
+            "filename": filename,
+            "gcs_path": f"local://{unique_filename}",
+            "public_url": public_url,
+            "mime_type": mime,
+            "size_bytes": os.path.getsize(local_path) if os.path.exists(local_path) else None,
+        }
     
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -2448,6 +2751,13 @@ def create_app():
                 else:
                     click.echo("ℹ️  Dry-run: no se guardó nada. Agregá --commit para confirmar.")
     register_import_command(app)
+
+    with app.app_context():
+        try:
+            _db.create_all()
+        except Exception as e:
+            app.logger.warning(f"Error asegurando tablas en base de datos: {e}")
+
     return app
 
 

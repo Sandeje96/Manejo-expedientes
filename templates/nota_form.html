@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+{% block title %}{% if item %}Editar Nota N° {{ item.numero_nota }}{% else %}Nueva Nota — CPIM{% endif %}{% endblock %}
+{% block content %}
+
+<style>
+/* ======== Tokens & Estilos ======== */
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --card-br: rgba(69,123,255,.18);
+}
+
+.form-card{
+  background: #ffffff;
+  border: 1px solid var(--card-br);
+  border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(69,123,255,.10);
+  max-width: 800px;
+  margin: 1.5rem auto 3rem;
+  overflow: hidden;
+}
+
+.form-header{
+  background: linear-gradient(135deg, var(--primary-blue-60), var(--primary-blue-40));
+  color: #fff;
+  padding: 1.25rem 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-body{
+  padding: 2rem 2.25rem;
+}
+
+.form-label{
+  font-weight: 700;
+  color: var(--primary-blue-20);
+  font-size: .92rem;
+  margin-bottom: .4rem;
+}
+
+.form-control, .form-select{
+  border: 2px solid var(--primary-blue-80);
+  border-radius: 12px;
+  padding: .65rem .9rem;
+  font-size: .95rem;
+  transition: all .2s ease;
+}
+
+.form-control:focus, .form-select:focus{
+  border-color: var(--primary-blue-50);
+  box-shadow: 0 0 0 .25rem rgba(69,123,255,.18);
+}
+
+.file-upload-box{
+  border: 2px dashed var(--primary-blue-60);
+  background: #f8fbff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s ease;
+  position: relative;
+}
+
+.file-upload-box:hover{
+  background: #f0f6ff;
+  border-color: var(--primary-blue-40);
+}
+
+.file-preview-container{
+  margin-top: 1rem;
+  display: none;
+  text-align: center;
+}
+
+.file-preview-img{
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 12px;
+  border: 2px solid var(--primary-blue-70);
+  box-shadow: 0 8px 20px rgba(0,0,0,.1);
+  object-fit: cover;
+}
+
+.btn-guardar{
+  background: linear-gradient(135deg, var(--primary-blue-55), var(--primary-blue-40));
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  padding: .75rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  box-shadow: 0 8px 24px rgba(69,123,255,.3);
+  transition: all .2s ease;
+}
+.btn-guardar:hover{
+  transform: translateY(-2px);
+  filter: brightness(.95);
+  color: #fff;
+}
+</style>
+
+<div class="container">
+  <div class="form-card">
+    <div class="form-header">
+      <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+        {% if item %}
+          <span>✏️</span> Editar Nota N° {{ item.numero_nota }}
+        {% else %}
+          <span>📨</span> Cargar Nueva Nota
+        {% endif %}
+      </h4>
+      <span class="badge bg-white text-primary fw-bold px-3 py-2" style="font-size: .9rem; border-radius: 10px;">
+        Mesa de Entradas
+      </span>
+    </div>
+
+    <form method="POST" 
+          action="{% if item %}{{ url_for('actualizar_nota', item_id=item.id) }}{% else %} {{ url_for('crear_nota') }} {% endif %}" 
+          enctype="multipart/form-data" 
+          class="form-body">
+      
+      <div class="row g-3">
+        <!-- N° de Nota (Autogenerado o editable) -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="numero_nota">
+            N° de Nota <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light fw-bold text-secondary" style="border: 2px solid var(--primary-blue-80); border-right: none; border-radius: 12px 0 0 12px;">
+              N°
+            </span>
+            <input type="number" 
+                   id="numero_nota" 
+                   name="numero_nota" 
+                   class="form-control" 
+                   style="border-radius: 0 12px 12px 0;"
+                   value="{% if item %}{{ item.numero_nota }}{% else %}{{ proximo_nro }}{% endif %}" 
+                   required>
+          </div>
+          <small class="text-muted d-block mt-1">Numeración correlativa automática.</small>
+        </div>
+
+        <!-- Fecha -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="fecha">
+            Fecha de Recepción <span class="text-danger">*</span>
+          </label>
+          <input type="date" 
+                 id="fecha" 
+                 name="fecha" 
+                 class="form-control" 
+                 value="{% if item and item.fecha %}{{ item.fecha.strftime('%Y-%m-%d') }}{% else %}{{ hoy }}{% endif %}" 
+                 required>
+        </div>
+
+        <!-- Recibido por -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="recibido_por">
+            Recibido por
+          </label>
+          <input type="text" 
+                 id="recibido_por" 
+                 name="recibido_por" 
+                 class="form-control" 
+                 list="sugerenciasRecibido"
+                 placeholder="Ej. Santiago, Gustavo..." 
+                 value="{% if item %}{{ item.recibido_por or '' }}{% else %}{{ current_user.nombre_completo or current_user.username }}{% endif %}">
+          <datalist id="sugerenciasRecibido">
+            <option value="Santiago"></option>
+            <option value="Gustavo"></option>
+            <option value="Secretaría"></option>
+          </datalist>
+        </div>
+
+        <!-- Remitente -->
+        <div class="col-12">
+          <label class="form-label" for="remitente">
+            Remitente (Quién envía la nota) <span class="text-danger">*</span>
+          </label>
+          <input type="text" 
+                 id="remitente" 
+                 name="remitente" 
+                 class="form-control" 
+                 placeholder="Ej. Ministerio de Industria, EPET N° 6, Ing. Pérez..." 
+                 value="{% if item %}{{ item.remitente }}{% endif %}" 
+                 required 
+                 autocomplete="off">
+        </div>
+
+        <!-- Referencia / Asunto -->
+        <div class="col-12">
+          <label class="form-label" for="referencia">
+            Referencia / Asunto <span class="text-danger">*</span>
+          </label>
+          <textarea id="referencia" 
+                    name="referencia" 
+                    class="form-control" 
+                    rows="3" 
+                    placeholder="Detalle o descripción de la solicitud, trámite o nota recibida..." 
+                    required>{% if item %}{{ item.referencia }}{% endif %}</textarea>
+        </div>
+
+        <!-- Adjunto / Foto de la Nota -->
+        <div class="col-12">
+          <label class="form-label">
+            Foto o Documento Escaneado de la Nota
+          </label>
+          
+          <div class="file-upload-box" onclick="document.getElementById('archivo').click()">
+            <div class="text-primary mb-2" style="font-size: 2rem;">📸</div>
+            <div class="fw-bold text-dark">
+              Hacé clic para seleccionar o sacar foto de la nota
+            </div>
+            <div class="text-muted small mt-1">
+              Formatos soportados: JPG, PNG, WEBP, PDF (Máx. 100 MB)
+            </div>
+            <input type="file" 
+                   id="archivo" 
+                   name="archivo" 
+                   accept="image/*,application/pdf" 
+                   style="display: none;"
+                   onchange="mostrarPrevisualizacion(this)">
+          </div>
+
+          <!-- Previsualización si se selecciona archivo nuevo -->
+          <div id="previewContainer" class="file-preview-container">
+            <div class="fw-bold text-muted small mb-2">Previsualización del archivo seleccionado:</div>
+            <img id="imgPreview" class="file-preview-img" src="" alt="Previsualización">
+            <div id="pdfPreviewBadge" class="badge bg-danger p-2 fs-6 mt-2" style="display:none;">📄 Archivo PDF Seleccionado</div>
+            <div id="fileNamePreview" class="small fw-semibold text-primary mt-1"></div>
+          </div>
+
+          <!-- Si estamos editando y ya tiene un archivo adjunto -->
+          {% if item and item.archivo_url %}
+            <div class="card mt-3 p-3 bg-light border-0" style="border-radius: 12px;">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                  {% if item.es_imagen %}
+                    <img src="{{ item.archivo_url }}" alt="Archivo actual" style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc;">
+                  {% else %}
+                    <span style="font-size: 2rem;">📄</span>
+                  {% endif %}
+                  <div>
+                    <div class="fw-bold text-dark">{{ item.archivo_nombre or 'Archivo adjunto actual' }}</div>
+                    <a href="{{ item.archivo_url }}" target="_blank" class="small text-primary fw-bold">
+                      👁️ Abrir / Ver actual
+                    </a>
+                  </div>
+                </div>
+
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="eliminar_archivo" value="1" id="eliminar_archivo">
+                  <label class="form-check-label text-danger fw-bold small" for="eliminar_archivo">
+                    🗑️ Quitar archivo adjunto
+                  </label>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Botones de Acción -->
+      <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+        <a href="{{ url_for('lista_notas') }}" class="btn btn-outline-secondary fw-bold px-3 py-2" style="border-radius: 12px;">
+          ← Volver al listado
+        </a>
+        <button type="submit" class="btn btn-guardar">
+          💾 {% if item %}Actualizar Nota{% else %}Guardar Nota{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function mostrarPrevisualizacion(input) {
+  const container = document.getElementById('previewContainer');
+  const img = document.getElementById('imgPreview');
+  const pdfBadge = document.getElementById('pdfPreviewBadge');
+  const nameLabel = document.getElementById('fileNamePreview');
+
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    nameLabel.textContent = file.name;
+    container.style.display = 'block';
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        img.src = e.target.result;
+        img.style.display = 'inline-block';
+        pdfBadge.style.display = 'none';
+      }
+      reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+      img.style.display = 'none';
+      pdfBadge.style.display = 'inline-block';
+    } else {
+      img.style.display = 'none';
+      pdfBadge.style.display = 'none';
+    }
+  } else {
+    container.style.display = 'none';
+  }
+}
+</script>
+
+{% endblock %}
