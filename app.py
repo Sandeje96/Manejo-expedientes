@@ -1371,7 +1371,7 @@ def create_app():
                 requiere_respuesta=(request.form.get("requiere_respuesta") == "1"),
             )
             
-            # Archivo adjunto
+            # Archivo adjunto (Nota original)
             archivo = request.files.get("archivo")
             if archivo and archivo.filename:
                 info = _upload_nota_file(archivo, dest_prefix="notas")
@@ -1381,6 +1381,20 @@ def create_app():
                     nota.archivo_url = info["public_url"]
                     nota.mime_type = info["mime_type"]
                     nota.size_bytes = info.get("size_bytes")
+            
+            # Archivo de contestación (si se subió contestación directamente)
+            archivo_resp = request.files.get("archivo_respuesta")
+            if archivo_resp and archivo_resp.filename:
+                info_resp = _upload_nota_file(archivo_resp, dest_prefix="notas/respuestas")
+                if info_resp:
+                    nota.respuesta_archivo_nombre = info_resp["filename"]
+                    nota.respuesta_archivo_gcs_path = info_resp["gcs_path"]
+                    nota.respuesta_archivo_url = info_resp["public_url"]
+                    nota.respuesta_mime_type = info_resp["mime_type"]
+                    nota.respuesta_size_bytes = info_resp.get("size_bytes")
+                    nota.respuesta_fecha = _parse_date(request.form.get("respuesta_fecha")) or date.today()
+                    nota.respuesta_observaciones = (request.form.get("respuesta_observaciones") or "").strip() or None
+                    nota.requiere_respuesta = True  # Queda automáticamente marcada y respondida
             
             _db.session.add(nota)
             _db.session.commit()
@@ -1435,7 +1449,7 @@ def create_app():
             item.medio_ingreso = medio_ingreso
             item.requiere_respuesta = request.form.get("requiere_respuesta") == "1"
             
-            # Archivo adjunto nuevo (si se subió uno para reemplazar)
+            # Archivo adjunto (Nota original)
             archivo = request.files.get("archivo")
             if archivo and archivo.filename:
                 info = _upload_nota_file(archivo, dest_prefix="notas")
@@ -1446,13 +1460,44 @@ def create_app():
                     item.mime_type = info["mime_type"]
                     item.size_bytes = info.get("size_bytes")
             
-            # Eliminar archivo si se tildó
+            # Eliminar archivo original si se tildó
             if request.form.get("eliminar_archivo") == "1":
                 item.archivo_nombre = None
                 item.archivo_gcs_path = None
                 item.archivo_url = None
                 item.mime_type = None
                 item.size_bytes = None
+
+            # Archivo de contestación (si se subió contestación)
+            archivo_resp = request.files.get("archivo_respuesta")
+            if archivo_resp and archivo_resp.filename:
+                info_resp = _upload_nota_file(archivo_resp, dest_prefix="notas/respuestas")
+                if info_resp:
+                    item.respuesta_archivo_nombre = info_resp["filename"]
+                    item.respuesta_archivo_gcs_path = info_resp["gcs_path"]
+                    item.respuesta_archivo_url = info_resp["public_url"]
+                    item.respuesta_mime_type = info_resp["mime_type"]
+                    item.respuesta_size_bytes = info_resp.get("size_bytes")
+                    item.respuesta_fecha = _parse_date(request.form.get("respuesta_fecha")) or date.today()
+                    item.respuesta_observaciones = (request.form.get("respuesta_observaciones") or "").strip() or None
+                    item.requiere_respuesta = True
+            else:
+                # Si ya tenía contestación y se actualizó la fecha u observaciones
+                if item.respuesta_archivo_url:
+                    fecha_resp_input = _parse_date(request.form.get("respuesta_fecha"))
+                    if fecha_resp_input:
+                        item.respuesta_fecha = fecha_resp_input
+                    item.respuesta_observaciones = (request.form.get("respuesta_observaciones") or "").strip() or None
+
+            # Eliminar contestación si se tildó
+            if request.form.get("eliminar_archivo_respuesta") == "1":
+                item.respuesta_archivo_nombre = None
+                item.respuesta_archivo_gcs_path = None
+                item.respuesta_archivo_url = None
+                item.respuesta_mime_type = None
+                item.respuesta_size_bytes = None
+                item.respuesta_fecha = None
+                item.respuesta_observaciones = None
                 
             _db.session.commit()
             flash(f"Nota N° {item.numero_nota} actualizada correctamente.", "success")

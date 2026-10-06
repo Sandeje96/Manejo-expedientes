@@ -22,7 +22,7 @@
   border: 1px solid var(--card-br);
   border-radius: 20px;
   box-shadow: 0 18px 45px rgba(69,123,255,.10);
-  max-width: 800px;
+  max-width: 820px;
   margin: 1.5rem auto 3rem;
   overflow: hidden;
 }
@@ -64,7 +64,7 @@
   border: 2px dashed var(--primary-blue-60);
   background: #f8fbff;
   border-radius: 16px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   text-align: center;
   cursor: pointer;
   transition: all .25s ease;
@@ -76,6 +76,20 @@
   border-color: var(--primary-blue-40);
 }
 
+.file-upload-box-resp{
+  border: 2px dashed #10b981;
+  background: #f0fdf4;
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s ease;
+}
+.file-upload-box-resp:hover{
+  background: #dcfce7;
+  border-color: #059669;
+}
+
 .file-preview-container{
   margin-top: 1rem;
   display: none;
@@ -83,8 +97,8 @@
 }
 
 .file-preview-img{
-  max-width: 220px;
-  max-height: 220px;
+  max-width: 200px;
+  max-height: 200px;
   border-radius: 12px;
   border: 2px solid var(--primary-blue-70);
   box-shadow: 0 8px 20px rgba(0,0,0,.1);
@@ -106,6 +120,15 @@
   transform: translateY(-2px);
   filter: brightness(.95);
   color: #fff;
+}
+
+.contestacion-panel{
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 5px solid #3b82f6;
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-top: .5rem;
 }
 </style>
 
@@ -198,25 +221,17 @@
 
         <!-- Requiere contestación -->
         <div class="col-12 col-md-6">
-          <label class="form-label d-block">Contestación</label>
+          <label class="form-label d-block">Seguimiento de Contestación</label>
           <div class="form-check form-switch p-0 d-flex align-items-center gap-2" style="min-height: 46px;">
             <input class="form-check-input ms-0" type="checkbox" role="switch" id="requiere_respuesta"
                    name="requiere_respuesta" value="1" style="width: 2.6rem; height: 1.4rem;"
-                   {% if item and item.requiere_respuesta %}checked{% endif %}>
+                   {% if item and item.requiere_respuesta %}checked{% endif %}
+                   onchange="toggleSeccionContestacion()">
             <label class="form-check-label fw-bold" for="requiere_respuesta">Esta nota requiere contestación</label>
           </div>
-          {% if item and item.requiere_respuesta %}
-            {% if item.respondida %}
-              <small class="text-success fw-bold d-block mt-1">
-                ✅ Respondida{% if item.respuesta_fecha %} el {{ item.respuesta_fecha.strftime('%d/%m/%Y') }}{% endif %}.
-                {% if item.respuesta_archivo_url %}<a href="{{ item.respuesta_archivo_url }}" target="_blank">Ver contestación</a>{% endif %}
-              </small>
-            {% else %}
-              <small class="text-warning-emphasis fw-bold d-block mt-1">⏳ Pendiente de contestación. Se sube desde el listado de notas.</small>
-            {% endif %}
-          {% else %}
-            <small class="text-muted d-block mt-1">Si la tildás, podrás subir la contestación después y quedará ligada a esta nota.</small>
-          {% endif %}
+          <small class="text-muted d-block mt-1">
+            Al tildar, se habilita la carga del archivo de contestación que quedará ligado a esta nota.
+          </small>
         </div>
 
         <!-- Remitente -->
@@ -247,16 +262,16 @@
                     required>{% if item %}{{ item.referencia }}{% endif %}</textarea>
         </div>
 
-        <!-- Adjunto / Foto de la Nota -->
+        <!-- Adjunto 1: Foto / Scan de la Nota Original -->
         <div class="col-12">
           <label class="form-label">
-            Foto o Documento Escaneado de la Nota
+            📄 Foto o Documento Escaneado de la Nota Recibida (Original)
           </label>
           
           <div class="file-upload-box" onclick="document.getElementById('archivo').click()">
             <div class="text-primary mb-2" style="font-size: 2rem;">📸</div>
             <div class="fw-bold text-dark">
-              Hacé clic para seleccionar o sacar foto de la nota
+              Hacé clic para seleccionar o sacar foto de la nota recibida
             </div>
             <div class="text-muted small mt-1">
               Formatos soportados: JPG, PNG, WEBP, PDF (Máx. 100 MB)
@@ -266,18 +281,18 @@
                    name="archivo" 
                    accept="image/*,application/pdf" 
                    style="display: none;"
-                   onchange="mostrarPrevisualizacion(this)">
+                   onchange="mostrarPrevisualizacion(this, 'previewContainer', 'imgPreview', 'pdfPreviewBadge', 'fileNamePreview')">
           </div>
 
           <!-- Previsualización si se selecciona archivo nuevo -->
           <div id="previewContainer" class="file-preview-container">
-            <div class="fw-bold text-muted small mb-2">Previsualización del archivo seleccionado:</div>
+            <div class="fw-bold text-muted small mb-2">Previsualización de la nota recibida:</div>
             <img id="imgPreview" class="file-preview-img" src="" alt="Previsualización">
             <div id="pdfPreviewBadge" class="badge bg-danger p-2 fs-6 mt-2" style="display:none;">📄 Archivo PDF Seleccionado</div>
             <div id="fileNamePreview" class="small fw-semibold text-primary mt-1"></div>
           </div>
 
-          <!-- Si estamos editando y ya tiene un archivo adjunto -->
+          <!-- Si estamos editando y ya tiene un archivo adjunto original -->
           {% if item and item.archivo_url %}
             <div class="card mt-3 p-3 bg-light border-0" style="border-radius: 12px;">
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -288,7 +303,7 @@
                     <span style="font-size: 2rem;">📄</span>
                   {% endif %}
                   <div>
-                    <div class="fw-bold text-dark">{{ item.archivo_nombre or 'Archivo adjunto actual' }}</div>
+                    <div class="fw-bold text-dark">{{ item.archivo_nombre or 'Nota original adjunta' }}</div>
                     <a href="{{ item.archivo_url }}" target="_blank" class="small text-primary fw-bold">
                       👁️ Abrir / Ver actual
                     </a>
@@ -298,13 +313,108 @@
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="eliminar_archivo" value="1" id="eliminar_archivo">
                   <label class="form-check-label text-danger fw-bold small" for="eliminar_archivo">
-                    🗑️ Quitar archivo adjunto
+                    🗑️ Quitar nota original
                   </label>
                 </div>
               </div>
             </div>
           {% endif %}
         </div>
+
+        <!-- SECCIÓN DE CONTESTACIÓN (Visible si requiere_respuesta está tildado) -->
+        <div class="col-12" id="seccionContestacion" style="{% if not item or not item.requiere_respuesta %}display: none;{% endif %}">
+          <div class="contestacion-panel">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="fw-bold text-primary mb-0 d-flex align-items-center gap-2">
+                <span>📤</span> Archivo de Contestación / Respuesta Emitida
+              </h6>
+              {% if item and item.respondida %}
+                <span class="badge bg-success fw-bold px-2 py-1">✅ Respondida</span>
+              {% else %}
+                <span class="badge bg-warning text-dark fw-bold px-2 py-1">⏳ Pendiente de respuesta</span>
+              {% endif %}
+            </div>
+
+            <div class="row g-3">
+              <!-- Upload Box Contestación -->
+              <div class="col-12">
+                <div class="file-upload-box-resp" onclick="document.getElementById('archivo_respuesta').click()">
+                  <div class="text-success mb-2" style="font-size: 2rem;">📤</div>
+                  <div class="fw-bold text-dark">
+                    Hacé clic para cargar el archivo o foto de la contestación
+                  </div>
+                  <div class="text-muted small mt-1">
+                    Al cargar un archivo, la nota quedará automáticamente marcada como <strong>Contestada</strong>.
+                  </div>
+                  <input type="file" 
+                         id="archivo_respuesta" 
+                         name="archivo_respuesta" 
+                         accept="image/*,application/pdf" 
+                         style="display: none;"
+                         onchange="mostrarPrevisualizacion(this, 'previewContainerResp', 'imgPreviewResp', 'pdfPreviewBadgeResp', 'fileNamePreviewResp')">
+                </div>
+
+                <!-- Previsualización contestación nueva -->
+                <div id="previewContainerResp" class="file-preview-container">
+                  <div class="fw-bold text-muted small mb-2">Previsualización de la contestación:</div>
+                  <img id="imgPreviewResp" class="file-preview-img" src="" alt="Previsualización contestación">
+                  <div id="pdfPreviewBadgeResp" class="badge bg-danger p-2 fs-6 mt-2" style="display:none;">📄 Archivo PDF Contestación</div>
+                  <div id="fileNamePreviewResp" class="small fw-semibold text-success mt-1"></div>
+                </div>
+
+                <!-- Si estamos editando y ya tiene contestación -->
+                {% if item and item.respuesta_archivo_url %}
+                  <div class="card mt-3 p-3 bg-white border shadow-sm" style="border-radius: 12px;">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                      <div class="d-flex align-items-center gap-3">
+                        {% if item.respuesta_es_imagen %}
+                          <img src="{{ item.respuesta_archivo_url }}" alt="Contestación actual" style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px; border: 1px solid #10b981;">
+                        {% else %}
+                          <span style="font-size: 2rem;">📄</span>
+                        {% endif %}
+                        <div>
+                          <div class="fw-bold text-dark">{{ item.respuesta_archivo_nombre or 'Archivo de contestación' }}</div>
+                          <a href="{{ item.respuesta_archivo_url }}" target="_blank" class="small text-success fw-bold">
+                            👁️ Abrir / Ver contestación
+                          </a>
+                        </div>
+                      </div>
+
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="eliminar_archivo_respuesta" value="1" id="eliminar_archivo_respuesta">
+                        <label class="form-check-label text-danger fw-bold small" for="eliminar_archivo_respuesta">
+                          🗑️ Quitar contestación
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+
+              <!-- Fecha de Contestación -->
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="respuesta_fecha">Fecha de Contestación</label>
+                <input type="date" 
+                       id="respuesta_fecha" 
+                       name="respuesta_fecha" 
+                       class="form-control" 
+                       value="{% if item and item.respuesta_fecha %}{{ item.respuesta_fecha.strftime('%Y-%m-%d') }}{% else %}{{ hoy }}{% endif %}">
+              </div>
+
+              <!-- Observaciones de la Contestación -->
+              <div class="col-12 col-md-6">
+                <label class="form-label" for="respuesta_observaciones">Observaciones de la Contestación</label>
+                <input type="text" 
+                       id="respuesta_observaciones" 
+                       name="respuesta_observaciones" 
+                       class="form-control" 
+                       placeholder="Ej. Enviada vía correo, entregada en mano..." 
+                       value="{% if item %}{{ item.respuesta_observaciones or '' }}{% endif %}">
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Botones de Acción -->
@@ -321,11 +431,19 @@
 </div>
 
 <script>
-function mostrarPrevisualizacion(input) {
-  const container = document.getElementById('previewContainer');
-  const img = document.getElementById('imgPreview');
-  const pdfBadge = document.getElementById('pdfPreviewBadge');
-  const nameLabel = document.getElementById('fileNamePreview');
+function toggleSeccionContestacion() {
+  const switchElem = document.getElementById('requiere_respuesta');
+  const panel = document.getElementById('seccionContestacion');
+  if (switchElem && panel) {
+    panel.style.display = switchElem.checked ? 'block' : 'none';
+  }
+}
+
+function mostrarPrevisualizacion(input, containerId, imgId, pdfBadgeId, nameLabelId) {
+  const container = document.getElementById(containerId);
+  const img = document.getElementById(imgId);
+  const pdfBadge = document.getElementById(pdfBadgeId);
+  const nameLabel = document.getElementById(nameLabelId);
 
   if (input.files && input.files[0]) {
     const file = input.files[0];
