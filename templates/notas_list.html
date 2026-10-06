@@ -19,8 +19,39 @@
   --card-br: rgba(69,123,255,.18);
 }
 
+/* ======== Tabs de navegación Entrada/Salida ======== */
+.nav-pills-custom {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 4px;
+  border-radius: 14px;
+  gap: 4px;
+  margin-bottom: 1.25rem;
+}
+.nav-pills-custom .nav-link-custom {
+  padding: .5rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: .92rem;
+  text-decoration: none;
+  color: #475569;
+  transition: all .2s ease;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.nav-pills-custom .nav-link-custom:hover {
+  color: var(--primary-blue-20);
+  background: rgba(255,255,255,.5);
+}
+.nav-pills-custom .nav-link-custom.active {
+  background: #ffffff;
+  color: var(--primary-blue-30);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+
 /* ======== Header y acciones ======== */
-.page-header{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; margin-top: 1rem; flex-wrap:wrap; }
+.page-header{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1.25rem; margin-top: .5rem; flex-wrap:wrap; }
 .page-title{
   margin:0; font-weight:800; color:var(--primary-blue-20); letter-spacing:.2px;
   display:flex; align-items:center; gap:.6rem;
@@ -213,6 +244,16 @@
 </style>
 
 <div class="container py-2">
+  <!-- Pestañas de Navegación Mesa de Entradas / Mesa de Salidas -->
+  <div class="nav-pills-custom">
+    <a href="{{ url_for('lista_notas') }}" class="nav-link-custom active">
+      <span>📥</span> Mesa de Entradas (Notas Recibidas)
+    </a>
+    <a href="{{ url_for('lista_notas_salida') }}" class="nav-link-custom">
+      <span>📤</span> Mesa de Salidas (Notas Emitidas)
+    </a>
+  </div>
+
   <!-- Header -->
   <div class="page-header">
     <div>

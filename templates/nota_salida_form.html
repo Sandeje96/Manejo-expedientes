@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% block title %}{% if item %}Editar Nota de Salida N° {{ item.numero_nota }}{% else %}Nueva Nota de Salida — CPIM{% endif %}{% endblock %}
+{% block content %}
+
+<style>
+/* ======== Tokens & Estilos ======== */
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --card-br: rgba(69,123,255,.18);
+}
+
+.form-card{
+  background: #ffffff;
+  border: 1px solid var(--card-br);
+  border-radius: 20px;
+  box-shadow: 0 18px 45px rgba(69,123,255,.10);
+  max-width: 820px;
+  margin: 1.5rem auto 3rem;
+  overflow: hidden;
+}
+
+.form-header{
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  color: #fff;
+  padding: 1.25rem 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-body{
+  padding: 2rem 2.25rem;
+}
+
+.form-label{
+  font-weight: 700;
+  color: var(--primary-blue-20);
+  font-size: .92rem;
+  margin-bottom: .4rem;
+}
+
+.form-control, .form-select{
+  border: 2px solid var(--primary-blue-80);
+  border-radius: 12px;
+  padding: .65rem .9rem;
+  font-size: .95rem;
+  transition: all .2s ease;
+}
+
+.form-control:focus, .form-select:focus{
+  border-color: var(--primary-blue-50);
+  box-shadow: 0 0 0 .25rem rgba(69,123,255,.18);
+}
+
+.file-upload-box{
+  border: 2px dashed #6366f1;
+  background: #f5f3ff;
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all .25s ease;
+  position: relative;
+}
+
+.file-upload-box:hover{
+  background: #ede9fe;
+  border-color: #4f46e5;
+}
+
+.file-preview-container{
+  margin-top: 1rem;
+  display: none;
+  text-align: center;
+}
+
+.file-preview-img{
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 12px;
+  border: 2px solid #818cf8;
+  box-shadow: 0 8px 20px rgba(0,0,0,.1);
+  object-fit: cover;
+}
+
+.btn-guardar{
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  border: none;
+  color: #fff;
+  font-weight: 800;
+  padding: .75rem 2rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  box-shadow: 0 8px 24px rgba(79,70,229,.3);
+  transition: all .2s ease;
+}
+.btn-guardar:hover{
+  transform: translateY(-2px);
+  filter: brightness(.95);
+  color: #fff;
+}
+</style>
+
+<div class="container">
+  <div class="form-card">
+    <div class="form-header">
+      <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+        {% if item %}
+          <span>✏️</span> Editar Nota de Salida N° {{ item.numero_nota }}
+        {% else %}
+          <span>📤</span> Emitir Nueva Nota de Salida
+        {% endif %}
+      </h4>
+      <span class="badge bg-white text-indigo fw-bold px-3 py-2" style="font-size: .9rem; border-radius: 10px; color: #4f46e5;">
+        Mesa de Salidas
+      </span>
+    </div>
+
+    <form method="POST" 
+          action="{% if item %}{{ url_for('actualizar_nota_salida', item_id=item.id) }}{% else %}{{ url_for('crear_nota_salida') }}{% endif %}" 
+          enctype="multipart/form-data" 
+          class="form-body">
+      
+      <div class="row g-3">
+        <!-- N° de Nota (Autogenerado o editable) -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="numero_nota">
+            N° de Nota de Salida <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light fw-bold text-secondary" style="border: 2px solid var(--primary-blue-80); border-right: none; border-radius: 12px 0 0 12px;">
+              N°
+            </span>
+            <input type="number" 
+                   id="numero_nota" 
+                   name="numero_nota" 
+                   class="form-control" 
+                   style="border-radius: 0 12px 12px 0;"
+                   value="{% if item %}{{ item.numero_nota }}{% else %}{{ proximo_nro }}{% endif %}" 
+                   required>
+          </div>
+          <small class="text-muted d-block mt-1">Numeración correlativa de salida.</small>
+        </div>
+
+        <!-- Fecha -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="fecha">
+            Fecha de Emisión / Envío <span class="text-danger">*</span>
+          </label>
+          <input type="date" 
+                 id="fecha" 
+                 name="fecha" 
+                 class="form-control" 
+                 value="{% if item and item.fecha %}{{ item.fecha.strftime('%Y-%m-%d') }}{% else %}{{ hoy }}{% endif %}" 
+                 required>
+        </div>
+
+        <!-- Emitido por -->
+        <div class="col-12 col-md-4">
+          <label class="form-label" for="emitido_por">
+            Emitido por <span class="text-danger">*</span>
+          </label>
+          {% set emisores_permitidos = ['Santiago', 'Miriam'] %}
+          <select id="emitido_por" name="emitido_por" class="form-select" required>
+            <option value="" {% if not item or not item.emitido_por %}selected{% endif %} disabled>Seleccionar...</option>
+            {% for em in emisores_permitidos %}
+              <option value="{{ em }}" {% if item and item.emitido_por == em %}selected{% endif %}>{{ em }}</option>
+            {% endfor %}
+            {% if item and item.emitido_por and item.emitido_por not in emisores_permitidos %}
+              <option value="{{ item.emitido_por }}" selected>{{ item.emitido_por }} (anterior)</option>
+            {% endif %}
+          </select>
+        </div>
+
+        <!-- Destinatario -->
+        <div class="col-12 col-md-7">
+          <label class="form-label" for="destinatario">
+            Destinatario (Entidad, Organismo o Persona) <span class="text-danger">*</span>
+          </label>
+          <input type="text" 
+                 id="destinatario" 
+                 name="destinatario" 
+                 list="destinatarios_list"
+                 class="form-control" 
+                 placeholder="Ej. Municipalidad de Posadas, Ministerio de Ecología, DGR..." 
+                 value="{% if item %}{{ item.destinatario }}{% endif %}" 
+                 required 
+                 autocomplete="off">
+          <datalist id="destinatarios_list"></datalist>
+        </div>
+
+        <!-- Medio de Envío -->
+        <div class="col-12 col-md-5">
+          <label class="form-label" for="medio_envio">
+            Medio de Envío <span class="text-danger">*</span>
+          </label>
+          <select id="medio_envio" name="medio_envio" class="form-select" required>
+            <option value="" {% if not item or not item.medio_envio %}selected{% endif %} disabled>Seleccionar...</option>
+            {% for m in medios %}
+              <option value="{{ m }}" {% if item and item.medio_envio == m %}selected{% endif %}>
+                {% if m == 'Email' %}📧 Email{% elif 'mano' in m.lower() %}🤝 {{ m }}{% elif 'postal' in m.lower() %}📮 Correo Postal{% else %}📦 {{ m }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Referencia / Asunto -->
+        <div class="col-12">
+          <label class="form-label" for="referencia">
+            Referencia / Asunto <span class="text-danger">*</span>
+          </label>
+          <textarea id="referencia" 
+                    name="referencia" 
+                    class="form-control" 
+                    rows="3" 
+                    placeholder="Detalle o descripción del contenido de la nota emitida..." 
+                    required>{% if item %}{{ item.referencia }}{% endif %}</textarea>
+        </div>
+
+        <!-- Observaciones -->
+        <div class="col-12">
+          <label class="form-label" for="observaciones">
+            Observaciones Adicionales
+          </label>
+          <input type="text" 
+                 id="observaciones" 
+                 name="observaciones" 
+                 class="form-control" 
+                 placeholder="Ej. A la espera de respuesta, entregado a Mesa de Entradas Central con sello..." 
+                 value="{% if item %}{{ item.observaciones or '' }}{% endif %}">
+        </div>
+
+        <!-- Adjunto: Copia firmada / Foto / Scan / Acuse -->
+        <div class="col-12">
+          <label class="form-label">
+            📄 Copia Firmada o Acuse de Recibo (Foto o PDF)
+          </label>
+          
+          <div class="file-upload-box" onclick="document.getElementById('archivo').click()">
+            <div class="text-primary mb-2" style="font-size: 2rem;">📤</div>
+            <div class="fw-bold text-dark">
+              Hacé clic para seleccionar o sacar foto de la nota emitida / constancia
+            </div>
+            <div class="text-muted small mt-1">
+              Formatos soportados: JPG, PNG, WEBP, PDF (Máx. 100 MB)
+            </div>
+            <input type="file" 
+                   id="archivo" 
+                   name="archivo" 
+                   accept="image/*,application/pdf" 
+                   style="display: none;"
+                   onchange="mostrarPrevisualizacion(this, 'previewContainer', 'imgPreview', 'pdfPreviewBadge', 'fileNamePreview')">
+          </div>
+
+          <!-- Previsualización si se selecciona archivo nuevo -->
+          <div id="previewContainer" class="file-preview-container">
+            <div class="fw-bold text-muted small mb-2">Previsualización del archivo adjunto:</div>
+            <img id="imgPreview" class="file-preview-img" src="" alt="Previsualización">
+            <div id="pdfPreviewBadge" class="badge bg-danger p-2 fs-6 mt-2" style="display:none;">📄 Archivo PDF Seleccionado</div>
+            <div id="fileNamePreview" class="small fw-semibold text-primary mt-1"></div>
+          </div>
+
+          <!-- Si estamos editando y ya tiene un archivo adjunto -->
+          {% if item and item.archivo_url %}
+            <div class="card mt-3 p-3 bg-light border-0" style="border-radius: 12px;">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-3">
+                  {% if item.es_imagen %}
+                    <img src="{{ item.archivo_url }}" alt="Archivo actual" style="width: 55px; height: 55px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc;">
+                  {% else %}
+                    <span style="font-size: 2rem;">📄</span>
+                  {% endif %}
+                  <div>
+                    <div class="fw-bold text-dark">{{ item.archivo_nombre or 'Documento adjunto' }}</div>
+                    <a href="{{ item.archivo_url }}" target="_blank" class="small text-primary fw-bold">
+                      👁️ Abrir / Ver documento actual
+                    </a>
+                  </div>
+                </div>
+
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="eliminar_archivo" value="1" id="eliminar_archivo">
+                  <label class="form-check-label text-danger fw-bold small" for="eliminar_archivo">
+                    🗑️ Quitar documento adjunto
+                  </label>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+
+      </div>
+
+      <!-- Botones de Acción -->
+      <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+        <a href="{{ url_for('lista_notas_salida') }}" class="btn btn-outline-secondary fw-bold px-3 py-2" style="border-radius: 12px;">
+          ← Volver a Mesa de Salidas
+        </a>
+        <button type="submit" class="btn btn-guardar">
+          💾 {% if item %}Actualizar Nota de Salida{% else %}Guardar Nota de Salida{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  // Autocomplete sugerencias de destinatarios
+  fetch("{{ url_for('sugerencias_destinatarios') }}")
+    .then(r => r.json())
+    .then(data => {
+      const dl = document.getElementById('destinatarios_list');
+      if (dl && Array.isArray(data)) {
+        dl.innerHTML = data.map(d => `<option value="${d}">`).join('');
+      }
+    })
+    .catch(e => console.error("Error cargando sugerencias:", e));
+});
+
+function mostrarPrevisualizacion(input, containerId, imgId, pdfBadgeId, nameLabelId) {
+  const container = document.getElementById(containerId);
+  const img = document.getElementById(imgId);
+  const pdfBadge = document.getElementById(pdfBadgeId);
+  const nameLabel = document.getElementById(nameLabelId);
+
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    nameLabel.textContent = file.name;
+    container.style.display = 'block';
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        img.src = e.target.result;
+        img.style.display = 'inline-block';
+        pdfBadge.style.display = 'none';
+      }
+      reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+      img.style.display = 'none';
+      pdfBadge.style.display = 'inline-block';
+    } else {
+      img.style.display = 'none';
+      pdfBadge.style.display = 'none';
+    }
+  } else {
+    container.style.display = 'none';
+  }
+}
+</script>
+
+{% endblock %}

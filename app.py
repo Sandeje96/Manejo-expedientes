@@ -148,6 +148,8 @@ def create_app():
             "lista_notas",             # módulo notas
             "nueva_nota", "crear_nota", "editar_nota", "actualizar_nota", "eliminar_nota",
             "sugerencias_remitentes", "subir_respuesta_nota", "quitar_respuesta_nota",
+            "lista_notas_salida", "nueva_nota_salida", "crear_nota_salida", "editar_nota_salida",
+            "actualizar_nota_salida", "eliminar_nota_salida", "sugerencias_destinatarios",
             "login", "logout",         # auth
             "perfil", "cambiar_password", "home"
         }
@@ -762,6 +764,50 @@ def create_app():
         def __repr__(self):
             return f"<Nota {self.numero_nota} - {self.remitente}>"
 
+    class NotaSalida(_db.Model):
+        """Modelo para el registro de notas de salida emitidas por el CPIM"""
+        __tablename__ = "notas_salida"
+        
+        id = _db.Column(_db.Integer, primary_key=True)
+        numero_nota = _db.Column(_db.Integer, nullable=False, index=True)
+        fecha = _db.Column(_db.Date, nullable=False, default=date.today)
+        referencia = _db.Column(_db.Text, nullable=False)
+        destinatario = _db.Column(_db.String(255), nullable=False)
+        emitido_por = _db.Column(_db.String(150), nullable=True)
+        medio_envio = _db.Column(_db.String(50), nullable=True)
+        
+        # Archivo adjunto / Copia firmada / Acuse
+        archivo_nombre = _db.Column(_db.String(255), nullable=True)
+        archivo_gcs_path = _db.Column(_db.String(512), nullable=True)
+        archivo_url = _db.Column(_db.String(512), nullable=True)
+        mime_type = _db.Column(_db.String(100), nullable=True)
+        size_bytes = _db.Column(_db.Integer, nullable=True)
+        observaciones = _db.Column(_db.Text, nullable=True)
+        
+        # Metadatos
+        created_at = _db.Column(_db.DateTime, default=datetime.utcnow)
+        updated_at = _db.Column(_db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        
+        @property
+        def es_imagen(self):
+            if self.mime_type and self.mime_type.startswith('image/'):
+                return True
+            if self.archivo_nombre:
+                ext = self.archivo_nombre.lower().split('.')[-1]
+                return ext in {'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'}
+            return False
+            
+        @property
+        def es_pdf(self):
+            if self.mime_type == 'application/pdf':
+                return True
+            if self.archivo_nombre:
+                return self.archivo_nombre.lower().endswith('.pdf')
+            return False
+
+        def __repr__(self):
+            return f"<NotaSalida {self.numero_nota} - {self.destinatario}>"
+
     # Valores permitidos para campos con opciones
     FORMATO_PERMITIDOS = ["Papel", "Digital"]
     ESTADOS_PAGO = ["pendiente", "pagado", "exento"]  # si no usás "exento", podés quitarlo
@@ -769,6 +815,7 @@ def create_app():
     TIPOS_TRABAJO_PERMITIDOS = ["REGISTRACION", "AMPLIACION", "OBRA NUEVA"]
     RECEPTORES_NOTAS = ["Santiago", "Miriam"]
     MEDIOS_INGRESO_NOTAS = ["Email", "Personalmente", "Otro"]
+    MEDIOS_ENVIO_NOTAS_SALIDA = ["Email", "En mano / Mesa de Entradas", "Correo Postal", "Otro"]
 
     # === Rutas ===
     @app.get("/")
@@ -1587,6 +1634,204 @@ def create_app():
         remitentes = _db.session.query(Nota.remitente).filter(Nota.remitente.ilike(like)).filter(Nota.remitente.isnot(None)).distinct().limit(10).all()
         return jsonify(sorted([r[0] for r in remitentes if r[0]]))
 
+    # === RUTAS PARA NOTAS DE SALIDA / MESA DE SALIDAS ===
+    @app.get("/notas-salida")
+    @login_required
+    def lista_notas_salida():
+        q = request.args.get("q", "").strip()
+        desde = _parse_date(request.args.get("desde"))
+        hasta = _parse_date(request.args.get("hasta"))
+        medio = request.args.get("medio", "").strip()
+        emitido_por = request.args.get("emitido_por", "").strip()
+        page = int(request.args.get("page", 1))
+        
+        query = NotaSalida.query
+        
+        if q:
+            like = f"%{q}%"
+            filtros = [
+                NotaSalida.referencia.ilike(like),
+                NotaSalida.destinatario.ilike(like),
+                NotaSalida.emitido_por.ilike(like),
+            ]
+            if q.isdigit():
+                filtros.append(NotaSalida.numero_nota == int(q))
+            query = query.filter(or_(*filtros))
+            
+        if desde:
+            query = query.filter(NotaSalida.fecha >= desde)
+        if hasta:
+            query = query.filter(NotaSalida.fecha <= hasta)
+        if medio in MEDIOS_ENVIO_NOTAS_SALIDA:
+            query = query.filter(NotaSalida.medio_envio == medio)
+        else:
+            medio = ""
+        if emitido_por:
+            query = query.filter(NotaSalida.emitido_por.ilike(f"%{emitido_por}%"))
+            
+        items = query.order_by(NotaSalida.numero_nota.desc(), NotaSalida.fecha.desc()).paginate(page=page, per_page=25)
+        
+        # Emisores registrados
+        emisores = _db.session.query(NotaSalida.emitido_por).filter(NotaSalida.emitido_por.isnot(None), NotaSalida.emitido_por != '').distinct().all()
+        emisores_list = sorted([e[0] for e in emisores if e[0]])
+        
+        proximo_nro = _siguiente_numero_nota_salida()
+        
+        return render_template("notas_salida_list.html", items=items, q=q, desde=request.args.get("desde", ""), hasta=request.args.get("hasta", ""), medio=medio, emitido_por=emitido_por, emisores_list=emisores_list, medios=MEDIOS_ENVIO_NOTAS_SALIDA, proximo_nro=proximo_nro)
+
+    @app.get("/notas-salida/nueva")
+    @login_required
+    def nueva_nota_salida():
+        proximo_nro = _siguiente_numero_nota_salida()
+        hoy = date.today().strftime("%Y-%m-%d")
+        return render_template("nota_salida_form.html", item=None, proximo_nro=proximo_nro, hoy=hoy, medios=MEDIOS_ENVIO_NOTAS_SALIDA, emisores=RECEPTORES_NOTAS)
+
+    @app.post("/notas-salida/nueva")
+    @login_required
+    def crear_nota_salida():
+        try:
+            nro_str = request.form.get("numero_nota", "").strip()
+            if nro_str and nro_str.isdigit():
+                numero_nota = int(nro_str)
+            else:
+                numero_nota = _siguiente_numero_nota_salida()
+                
+            fecha_str = request.form.get("fecha", "").strip()
+            fecha = _parse_date(fecha_str) or date.today()
+            
+            destinatario = request.form.get("destinatario", "").strip()
+            referencia = request.form.get("referencia", "").strip()
+            emitido_por = request.form.get("emitido_por", "").strip()
+            medio_envio = request.form.get("medio_envio", "").strip()
+            observaciones = request.form.get("observaciones", "").strip() or None
+            
+            if not destinatario or not referencia:
+                flash("El Destinatario y la Referencia / Asunto son obligatorios.", "danger")
+                return redirect(url_for("nueva_nota_salida"))
+                
+            if medio_envio and medio_envio not in MEDIOS_ENVIO_NOTAS_SALIDA:
+                medio_envio = "Otro"
+                
+            nota = NotaSalida(
+                numero_nota=numero_nota,
+                fecha=fecha,
+                destinatario=_capitalize_words(destinatario),
+                referencia=referencia,
+                emitido_por=_capitalize_words(emitido_por) if emitido_por else None,
+                medio_envio=medio_envio if medio_envio else None,
+                observaciones=observaciones
+            )
+            
+            # Archivo adjunto (Nota de salida firmada o acuse)
+            archivo = request.files.get("archivo")
+            if archivo and archivo.filename:
+                info = _upload_nota_file(archivo, dest_prefix="notas_salida")
+                if info:
+                    nota.archivo_nombre = info["filename"]
+                    nota.archivo_gcs_path = info["gcs_path"]
+                    nota.archivo_url = info["public_url"]
+                    nota.mime_type = info["mime_type"]
+                    nota.size_bytes = info.get("size_bytes")
+            
+            _db.session.add(nota)
+            _db.session.commit()
+            flash(f"Nota de Salida N° {nota.numero_nota} registrada con éxito.", "success")
+            return redirect(url_for("lista_notas_salida"))
+            
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error creando nota de salida: {e}")
+            flash(f"Error al guardar la nota de salida: {e}", "danger")
+            return redirect(url_for("nueva_nota_salida"))
+
+    @app.get("/notas-salida/<int:item_id>/editar")
+    @login_required
+    def editar_nota_salida(item_id: int):
+        item = NotaSalida.query.get_or_404(item_id)
+        return render_template("nota_salida_form.html", item=item, proximo_nro=item.numero_nota, hoy=item.fecha.strftime("%Y-%m-%d") if item.fecha else "", medios=MEDIOS_ENVIO_NOTAS_SALIDA, emisores=RECEPTORES_NOTAS)
+
+    @app.post("/notas-salida/<int:item_id>/editar")
+    @login_required
+    def actualizar_nota_salida(item_id: int):
+        item = NotaSalida.query.get_or_404(item_id)
+        try:
+            nro_str = request.form.get("numero_nota", "").strip()
+            if nro_str and nro_str.isdigit():
+                item.numero_nota = int(nro_str)
+                
+            fecha_str = request.form.get("fecha", "").strip()
+            if fecha_str:
+                item.fecha = _parse_date(fecha_str) or item.fecha
+                
+            destinatario = request.form.get("destinatario", "").strip()
+            referencia = request.form.get("referencia", "").strip()
+            emitido_por = request.form.get("emitido_por", "").strip()
+            medio_envio = request.form.get("medio_envio", "").strip()
+            observaciones = request.form.get("observaciones", "").strip() or None
+            
+            if not destinatario or not referencia:
+                flash("El Destinatario y la Referencia / Asunto son obligatorios.", "danger")
+                return redirect(url_for("editar_nota_salida", item_id=item.id))
+                
+            item.destinatario = _capitalize_words(destinatario)
+            item.referencia = referencia
+            item.emitido_por = _capitalize_words(emitido_por) if emitido_por else None
+            item.medio_envio = medio_envio if medio_envio in MEDIOS_ENVIO_NOTAS_SALIDA else item.medio_envio
+            item.observaciones = observaciones
+            
+            # Archivo adjunto (si se subió uno para reemplazar)
+            archivo = request.files.get("archivo")
+            if archivo and archivo.filename:
+                info = _upload_nota_file(archivo, dest_prefix="notas_salida")
+                if info:
+                    item.archivo_nombre = info["filename"]
+                    item.archivo_gcs_path = info["gcs_path"]
+                    item.archivo_url = info["public_url"]
+                    item.mime_type = info["mime_type"]
+                    item.size_bytes = info.get("size_bytes")
+            
+            # Eliminar archivo si se tildó
+            if request.form.get("eliminar_archivo") == "1":
+                item.archivo_nombre = None
+                item.archivo_gcs_path = None
+                item.archivo_url = None
+                item.mime_type = None
+                item.size_bytes = None
+                
+            _db.session.commit()
+            flash(f"Nota de Salida N° {item.numero_nota} actualizada correctamente.", "success")
+            return redirect(url_for("lista_notas_salida"))
+            
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error(f"Error actualizando nota de salida {item_id}: {e}")
+            flash(f"Error al actualizar la nota de salida: {e}", "danger")
+            return redirect(url_for("editar_nota_salida", item_id=item.id))
+
+    @app.post("/notas-salida/<int:item_id>/eliminar")
+    @login_required
+    def eliminar_nota_salida(item_id: int):
+        item = NotaSalida.query.get_or_404(item_id)
+        try:
+            nro = item.numero_nota
+            _db.session.delete(item)
+            _db.session.commit()
+            flash(f"Nota de Salida N° {nro} eliminada.", "info")
+        except Exception as e:
+            _db.session.rollback()
+            flash(f"Error al eliminar la nota de salida: {e}", "danger")
+        return redirect(url_for("lista_notas_salida"))
+
+    @app.get("/api/sugerencias-destinatarios")
+    @login_required
+    def sugerencias_destinatarios():
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:
+            return jsonify([])
+        like = f"%{q}%"
+        destinatarios = _db.session.query(NotaSalida.destinatario).filter(NotaSalida.destinatario.ilike(like)).filter(NotaSalida.destinatario.isnot(None)).distinct().limit(10).all()
+        return jsonify(sorted([d[0] for d in destinatarios if d[0]]))
+
     # === RUTAS PARA ANÁLISIS DE TASAS ===
     @app.get("/analisis-tasas")
     @login_required
@@ -2386,6 +2631,13 @@ def create_app():
     def _siguiente_numero_nota():
         try:
             max_num = _db.session.query(_db.func.max(Nota.numero_nota)).scalar()
+            return (max_num or 0) + 1
+        except Exception:
+            return 1
+
+    def _siguiente_numero_nota_salida():
+        try:
+            max_num = _db.session.query(_db.func.max(NotaSalida.numero_nota)).scalar()
             return (max_num or 0) + 1
         except Exception:
             return 1

@@ -1,0 +1,522 @@
+{% extends 'base.html' %}
+{% block title %}Notas de Salida — CPIM{% endblock %}
+{% block content %}
+
+<style>
+/* ======== Paleta & Tokens ======== */
+:root{
+  --primary-blue-90: hsl(220,100%,90%);
+  --primary-blue-80: hsl(220,100%,80%);
+  --primary-blue-70: hsl(220,100%,70%);
+  --primary-blue-60: hsl(220,100%,60%);
+  --primary-blue-55: hsl(220,100%,55%);
+  --primary-blue-50: hsl(220,100%,50%);
+  --primary-blue-40: hsl(220,100%,40%);
+  --primary-blue-30: hsl(220,100%,30%);
+  --primary-blue-20: hsl(220,100%,20%);
+  --ink-900:#0b1220; --ink-700:#22314d; --ink-300:#9aa3b2;
+  --row-border: rgba(25, 60, 180, .18);
+  --card-br: rgba(69,123,255,.18);
+}
+
+/* ======== Tabs de navegación Entrada/Salida ======== */
+.nav-pills-custom {
+  display: inline-flex;
+  background: #e2e8f0;
+  padding: 4px;
+  border-radius: 14px;
+  gap: 4px;
+  margin-bottom: 1.25rem;
+}
+.nav-pills-custom .nav-link-custom {
+  padding: .5rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: .92rem;
+  text-decoration: none;
+  color: #475569;
+  transition: all .2s ease;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.nav-pills-custom .nav-link-custom:hover {
+  color: var(--primary-blue-20);
+  background: rgba(255,255,255,.5);
+}
+.nav-pills-custom .nav-link-custom.active {
+  background: #ffffff;
+  color: var(--primary-blue-30);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+
+/* ======== Header y acciones ======== */
+.page-header{ display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; margin-top:.5rem; flex-wrap:wrap; }
+.page-title{
+  margin:0; font-weight:800; color:var(--primary-blue-20); letter-spacing:.2px;
+  display:flex; align-items:center; gap:.6rem;
+}
+.page-title::before{
+  content:""; width:10px; height:24px; border-radius:12px;
+  background: linear-gradient(180deg, #10b981, #059669);
+  box-shadow:0 6px 18px rgba(16,185,129,.35);
+}
+
+.btn-strong-salida{
+  background:linear-gradient(135deg, #10b981, #059669);
+  border:none; color:#fff; padding:.55rem 1.1rem; border-radius:12px;
+  box-shadow:0 8px 24px rgba(16,185,129,.3); font-weight:800; font-size:.92rem;
+  display:inline-flex; align-items:center; gap:.4rem;
+}
+.btn-strong-salida:hover{ transform:translateY(-1px); color:#fff; filter:brightness(.96); }
+
+/* Toolbar / Filtros */
+.toolbar{
+  background:#fff; border:1px solid var(--card-br); border-radius:16px;
+  padding:.9rem 1rem; margin-bottom:1.25rem; box-shadow:0 10px 28px rgba(69,123,255,.08);
+}
+.toolbar .form-control, .toolbar .form-select{
+  border:2px solid var(--primary-blue-80); border-radius:12px; background:#fff; height:42px; font-size:.9rem;
+}
+.toolbar .form-control:focus, .toolbar .form-select:focus{
+  border-color:var(--primary-blue-50); box-shadow:0 0 0 .2rem rgba(69,123,255,.15);
+}
+
+/* Tabla */
+.table-card{
+  background:#fff; border:1px solid var(--card-br); border-radius:18px;
+  box-shadow:0 18px 42px rgba(69,123,255,.1); overflow:hidden; margin-bottom:2rem;
+}
+.table thead th{
+  font-weight:800; color: var(--primary-blue-20);
+  border-bottom: 2px solid var(--row-border) !important;
+  background: linear-gradient(180deg, #f8fbff, #f0fdf4);
+  padding: .85rem .75rem;
+  font-size: .88rem;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.table tbody td{
+  padding: .85rem .75rem;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--row-border);
+  font-size: .92rem;
+}
+.table-hover tbody tr:hover{
+  background: rgba(16,185,129,.05);
+}
+
+.badge-nota-salida{
+  background: linear-gradient(135deg, #10b981, #047857);
+  color: #fff;
+  font-weight: 800;
+  font-size: .95rem;
+  padding: .35rem .75rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(16,185,129,.25);
+  display: inline-block;
+  min-width: 42px;
+  text-align: center;
+}
+
+.badge-emisor{
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #86efac;
+  padding: .25rem .6rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: .82rem;
+  display: inline-block;
+}
+
+.badge-medio{
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  padding: .25rem .6rem;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: .82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.thumb-preview{
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #86efac;
+  cursor: pointer;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.thumb-preview:hover{
+  transform: scale(1.1);
+  box-shadow: 0 6px 18px rgba(16,185,129,.3);
+  border-color: #059669;
+}
+
+.btn-file-preview{
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-weight: 700;
+  font-size: .8rem;
+  border-radius: 8px;
+  padding: .25rem .55rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  transition: all .2s;
+}
+.btn-file-preview:hover{
+  background: #10b981;
+  color: #fff;
+}
+
+.empty-state{
+  text-align: center;
+  padding: 3.5rem 1.5rem;
+  color: var(--ink-700);
+}
+.empty-state-icon{
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+  opacity: .7;
+}
+
+/* Modal lightbox imagen */
+.lightbox-img{
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+</style>
+
+<div class="container py-2">
+  <!-- Pestañas de Navegación Mesa de Entradas / Mesa de Salidas -->
+  <div class="nav-pills-custom">
+    <a href="{{ url_for('lista_notas') }}" class="nav-link-custom">
+      <span>📥</span> Mesa de Entradas (Notas Recibidas)
+    </a>
+    <a href="{{ url_for('lista_notas_salida') }}" class="nav-link-custom active">
+      <span>📤</span> Mesa de Salidas (Notas Emitidas)
+    </a>
+  </div>
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <h2 class="page-title">
+        📤 Registro de Notas de Salida
+      </h2>
+      <div class="text-muted small mt-1">
+        Notas oficiales, oficios y comunicaciones emitidas por el Consejo hacia entidades y profesionales.
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('nueva_nota_salida') }}" class="btn btn-strong-salida">
+        <span>➕</span> Cargar Nueva Nota de Salida
+      </a>
+    </div>
+  </div>
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <div class="toolbar">
+    <form method="GET" action="{{ url_for('lista_notas_salida') }}" class="row g-2 align-items-end">
+      <!-- Buscador -->
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-bold text-muted mb-1">Buscar</label>
+        <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="N° Nota, Destinatario, Referencia...">
+      </div>
+      <!-- Fecha Desde -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-bold text-muted mb-1">Desde</label>
+        <input type="date" name="desde" value="{{ desde }}" class="form-control">
+      </div>
+      <!-- Fecha Hasta -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-bold text-muted mb-1">Hasta</label>
+        <input type="date" name="hasta" value="{{ hasta }}" class="form-control">
+      </div>
+      <!-- Emitido por -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-bold text-muted mb-1">Emitido por</label>
+        <select name="emitido_por" class="form-select">
+          <option value="">(Todos)</option>
+          {% for emi in emisores_list %}
+            <option value="{{ emi }}" {% if emitido_por == emi %}selected{% endif %}>{{ emi }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Medio de Envío -->
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-bold text-muted mb-1">Medio de Envío</label>
+        <select name="medio" class="form-select">
+          <option value="">(Todos)</option>
+          {% for m in medios %}
+            <option value="{{ m }}" {% if medio == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Botones -->
+      <div class="col-12 d-flex justify-content-end gap-2 mt-2">
+        {% if q or desde or hasta or emitido_por or medio %}
+          <a href="{{ url_for('lista_notas_salida') }}" class="btn btn-outline-secondary d-inline-flex align-items-center gap-1 fw-bold" style="height:38px; border-radius:10px; font-size:.88rem;">
+            ✕ Limpiar filtros
+          </a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary fw-bold px-4 d-inline-flex align-items-center gap-1" style="height:38px; border-radius:10px; font-size:.88rem;">
+          🔍 Aplicar Filtros
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Contenedor Tabla -->
+  <div class="table-card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th style="width: 80px; text-align: center;">N°</th>
+            <th style="width: 105px;">Fecha</th>
+            <th style="width: 220px;">Destinatario</th>
+            <th>Referencia / Asunto</th>
+            <th style="width: 140px;">Emitido por</th>
+            <th style="width: 150px;">Medio de Envío</th>
+            <th style="width: 110px; text-align: center;">Copia / Acuse</th>
+            <th style="width: 95px; text-align: center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if items.items %}
+            {% for nota in items.items %}
+              <tr>
+                <!-- N° Nota -->
+                <td class="text-center">
+                  <span class="badge-nota-salida">{{ nota.numero_nota }}</span>
+                </td>
+
+                <!-- Fecha -->
+                <td>
+                  <span class="fw-semibold text-secondary">
+                    {{ nota.fecha.strftime('%d/%m/%Y') if nota.fecha else '-' }}
+                  </span>
+                </td>
+
+                <!-- Destinatario -->
+                <td>
+                  <span class="fw-bold text-primary-emphasis">
+                    {{ nota.destinatario }}
+                  </span>
+                </td>
+
+                <!-- Referencia -->
+                <td>
+                  <div class="fw-medium text-dark" style="max-width: 380px; word-break: break-word;">
+                    {{ nota.referencia }}
+                  </div>
+                  {% if nota.observaciones %}
+                    <div class="small text-muted mt-1" style="font-size: .8rem;">
+                      💬 {{ nota.observaciones }}
+                    </div>
+                  {% endif %}
+                </td>
+
+                <!-- Emitido por -->
+                <td>
+                  {% if nota.emitido_por %}
+                    <span class="badge-emisor">{{ nota.emitido_por }}</span>
+                  {% else %}
+                    <span class="text-muted small">-</span>
+                  {% endif %}
+                </td>
+
+                <!-- Medio de Envío -->
+                <td>
+                  {% if nota.medio_envio %}
+                    <span class="badge-medio">
+                      {% if 'Email' in nota.medio_envio %}📧 Email
+                      {% elif 'mano' in nota.medio_envio %}🤝 En mano / Mesa
+                      {% elif 'Postal' in nota.medio_envio %}📬 Correo
+                      {% else %}📦 {{ nota.medio_envio }}
+                      {% endif %}
+                    </span>
+                  {% else %}
+                    <span class="text-muted small">-</span>
+                  {% endif %}
+                </td>
+
+                <!-- Foto / Adjunto -->
+                <td class="text-center">
+                  {% if nota.archivo_url %}
+                    {% if nota.es_imagen %}
+                      <img src="{{ nota.archivo_url }}" 
+                           alt="Nota Salida {{ nota.numero_nota }}" 
+                           class="thumb-preview shadow-sm"
+                           onclick="mostrarLightbox('{{ nota.archivo_url }}', 'Nota de Salida N° {{ nota.numero_nota }} - {{ nota.destinatario }}')"
+                           title="Clic para ampliar copia">
+                    {% elif nota.es_pdf %}
+                      <a href="{{ nota.archivo_url }}" target="_blank" class="btn-file-preview" title="Abrir PDF">
+                        <span>📄</span> PDF
+                      </a>
+                    {% else %}
+                      <a href="{{ nota.archivo_url }}" target="_blank" class="btn-file-preview" title="Ver archivo">
+                        <span>📎</span> Archivo
+                      </a>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted small italic">Sin archivo</span>
+                  {% endif %}
+                </td>
+
+                <!-- Acciones -->
+                <td class="text-center">
+                  <div class="d-inline-flex gap-1">
+                    <a href="{{ url_for('editar_nota_salida', item_id=nota.id) }}" 
+                       class="btn btn-sm btn-outline-primary" 
+                       style="border-radius: 8px; padding: .25rem .55rem;"
+                       title="Editar Nota de Salida">
+                      ✏️
+                    </a>
+                    
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-danger" 
+                            style="border-radius: 8px; padding: .25rem .55rem;"
+                            onclick="confirmarEliminacion('{{ nota.id }}', '{{ nota.numero_nota }}')"
+                            title="Eliminar Nota de Salida">
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8">
+                <div class="empty-state">
+                  <div class="empty-state-icon">📤</div>
+                  <h5 class="fw-bold text-muted">No se encontraron notas de salida registradas</h5>
+                  <p class="text-muted small mb-3">
+                    {% if q or desde or hasta or emitido_por or medio %}
+                      Probá ajustando o limpiando los filtros de búsqueda.
+                    {% else %}
+                      Comenzá registrando la primera nota de salida emitida por el Consejo.
+                    {% endif %}
+                  </p>
+                  <a href="{{ url_for('nueva_nota_salida') }}" class="btn btn-strong-salida btn-sm">
+                    ➕ Cargar Nota de Salida
+                  </a>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginación -->
+    {% if items.pages > 1 %}
+      <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <small class="text-muted fw-semibold">
+          Mostrando {{ items.items|length }} de {{ items.total }} notas de salida
+        </small>
+        <nav aria-label="Paginación de notas de salida">
+          <ul class="pagination pagination-sm mb-0">
+            {% if items.has_prev %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('lista_notas_salida', page=items.prev_num, q=q, desde=desde, hasta=hasta, emitido_por=emitido_por, medio=medio) }}">« Anterior</a>
+              </li>
+            {% endif %}
+
+            {% for page_num in items.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+              {% if page_num %}
+                <li class="page-item {% if page_num == items.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('lista_notas_salida', page=page_num, q=q, desde=desde, hasta=hasta, emitido_por=emitido_por, medio=medio) }}">{{ page_num }}</a>
+                </li>
+              {% else %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+            {% endfor %}
+
+            {% if items.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('lista_notas_salida', page=items.next_num, q=q, desde=desde, hasta=hasta, emitido_por=emitido_por, medio=medio) }}">Siguiente »</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal Visor de Imagen (Lightbox) -->
+<div class="modal fade" id="lightboxModal" tabindex="-1" aria-labelledby="lightboxModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="border-radius: 18px; border: 1px solid var(--card-br); box-shadow: 0 20px 50px rgba(0,0,0,.25);">
+      <div class="modal-header border-bottom py-2 px-3">
+        <h6 class="modal-title fw-bold text-primary-emphasis" id="lightboxModalLabel">Copia de la Nota de Salida</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body text-center p-3">
+        <img src="" id="lightboxImg" class="lightbox-img" alt="Foto ampliada">
+      </div>
+      <div class="modal-footer border-top py-2 px-3 justify-content-between">
+        <a href="#" id="lightboxDescargar" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" download>
+          ⬇️ Abrir imagen completa
+        </a>
+        <button type="button" class="btn btn-sm btn-secondary fw-bold" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirmación Eliminación -->
+<div class="modal fade" id="eliminarModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius: 16px;">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold text-danger">⚠️ Confirmar eliminación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body py-3">
+        ¿Estás seguro de que deseas eliminar la <strong id="eliminarTextoNota">Nota de Salida</strong>?
+        <div class="text-muted small mt-2">Esta acción no se puede deshacer.</div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formEliminarNota" method="POST" action="">
+          <button type="submit" class="btn btn-danger fw-bold">Sí, eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function mostrarLightbox(url, titulo) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightboxModalLabel').textContent = titulo || 'Copia de la Nota de Salida';
+  document.getElementById('lightboxDescargar').href = url;
+  
+  const modal = new bootstrap.Modal(document.getElementById('lightboxModal'));
+  modal.show();
+}
+
+function confirmarEliminacion(id, numero) {
+  document.getElementById('eliminarTextoNota').textContent = `Nota de Salida N° ${numero}`;
+  document.getElementById('formEliminarNota').action = `/notas-salida/${id}/eliminar`;
+  
+  const modal = new bootstrap.Modal(document.getElementById('eliminarModal'));
+  modal.show();
+}
+</script>
+
+{% endblock %}
